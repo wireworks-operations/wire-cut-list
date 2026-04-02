@@ -12,106 +12,470 @@
             -webkit-text-fill-color: transparent;
             font-weight: bold;
         }
+        .mobile-touch-input {
+            padding: 0.75rem;
+        }
+        .mobile-compact-spacing {
+            margin-bottom: 0.75rem;
+        }
         .wire-list-item.dragging {
             opacity: 0.5;
             border: 2px dashed #3b82f6;
         }
         input:focus, select:focus, textarea:focus {
             outline: none;
-            ring: 2px;
-            ring-color: #3b82f6;
             border-color: #3b82f6;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+        }
+        .modal-overlay {
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(2px);
+        }
+        .custom-modal {
+            background: white;
+            border-radius: 1.5rem;
+            border: 3px solid #eab308; /* Gold/Yellow border */
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            max-width: 90vw;
+            width: 500px;
+        }
+        .archive-modal {
+            border-color: #ef4444; /* Red border for removal */
+        }
+        .context-menu {
+            position: fixed;
+            background: white;
+            border: 1px solid #e5e7eb;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            z-index: 1000;
+            display: none;
+            border-radius: 0.75rem;
+            min-width: 160px;
+            overflow: hidden;
+            padding: 4px;
+        }
+        .context-menu-item {
+            padding: 10px 12px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border-radius: 0.5rem;
+            transition: background 0.2s;
+        }
+        .context-menu-item:hover {
+            background: #f3f4f6;
+        }
+        .color-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: 1px solid rgba(0,0,0,0.1);
         }
     </style>
 </head>
 <body class="bg-gray-100 p-4 text-xs">
 
-    <div class="max-w-2xl mx-auto space-y-6">
-        <!-- Main Wire Cut List -->
-        <div class="p-4 bg-white border border-gray-200 rounded-xl shadow-lg">
-            <div class="flex justify-between items-center mb-4 pb-2 border-b">
-                <h1 class="text-xl font-bold header-gradient">🗂️ Wire Cut List</h1>
-                <div class="flex gap-2">
-                    <button id="addWireListItemBtn"
-                        class="px-3 py-1.5 bg-blue-700 text-white rounded-lg hover:bg-blue-800 transition font-bold shadow-md">
-                        + Add Item
-                    </button>
-                    <button id="refreshWireListBtn"
-                        class="px-3 py-1.5 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-bold">
-                        🔄 Refresh
-                    </button>
+    <div class="max-w-3xl mx-auto space-y-6">
+        <!-- Wire Cut List (Collapsible) -->
+        <div class="p-3 bg-gradient-to-r from-yellow-50 to-amber-50 border border-yellow-200 rounded-lg shadow-md">
+            <button id="toggleWireList"
+                class="w-full text-left font-semibold text-yellow-800 flex justify-between items-center">
+                <span>🗂️ Wire Cut List</span>
+                <span id="wireListToggle">►</span>
+            </button>
+            <div id="wireListContent" class="mt-2 text-xs space-y-2 hidden">
+                <div class="flex justify-between items-center flex-wrap gap-2">
+                    <div class="flex gap-2">
+                        <button id="addWireListItemBtn"
+                            class="px-2 py-1 bg-yellow-600 text-white rounded hover:bg-yellow-700 transition font-bold">
+                            + Add Item
+                        </button>
+                        <button id="refreshWireListBtn"
+                            class="px-2 py-1 bg-amber-500 text-white rounded hover:bg-amber-600 transition font-bold">
+                            🔄 Refresh
+                        </button>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <div class="flex items-center gap-1">
+                            <label for="wireListSearch" class="font-medium">Search:</label>
+                            <input id="wireListSearch" type="text" placeholder="Search list..."
+                                class="p-1 border border-yellow-300 rounded bg-white text-xs w-24 sm:w-32">
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <label for="wireListStatusFilter" class="font-medium">Filter:</label>
+                            <select id="wireListStatusFilter"
+                                class="p-1 border border-yellow-300 rounded bg-white text-xs">
+                                <option value="active">Active</option>
+                                <option value="completed">Completed</option>
+                                <option value="archived">Archived</option>
+                                <option value="all">All</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="wireCutListItems" class="space-y-3 pt-2 min-h-[50px]">
+                    <!-- List items will be dynamically added here -->
+                    <p class="text-center text-gray-500 italic">No pending items in the list.</p>
                 </div>
             </div>
+        </div>
 
-            <div class="flex flex-wrap gap-3 mb-6 bg-gray-50 p-3 rounded-lg border border-gray-100">
-                <div class="flex-1 min-w-[150px]">
-                    <label for="wireListSearch" class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Search List</label>
-                    <input id="wireListSearch" type="text" placeholder="Search order, customer, wire..."
-                        class="w-full p-2 border border-gray-300 rounded-lg bg-white text-sm">
+        <h3 class="text-lg font-bold mb-3 text-center header-gradient">Record Wire Cut</h3>
+
+        <!--Search Bar-->
+        <div class="mb-4 p-3 bg-white rounded-xl shadow-md">
+            <div class="flex flex-wrap gap-2 mb-2">
+                <input id="searchInput" type="text" placeholder="Search by wire ID, order number, cutter..."
+                    class="flex-1 min-w-48 p-2 border border-gray-300 rounded-lg text-sm" />
+                <select id="filterByField" class="p-2 border border-gray-300 rounded-lg text-sm">
+                    <option value="all">All Fields</option>
+                    <option value="wireId">Wire ID</option>
+                    <option value="orderNumber">Order Number</option>
+                    <option value="cutterName">Cutter Name</option>
+                    <option value="customerName">Customer</option>
+                </select>
+                <select id="sortByField" class="p-2 border border-gray-300 rounded-lg text-sm">
+                    <option value="timestamp">Newest First</option>
+                    <option value="wireId">Wire ID (A-Z)</option>
+                    <option value="cutLength">Cut Length (Low-High)</option>
+                    <option value="cutterName">Cutter Name (A-Z)</option>
+                    <option value="orderNumber">Order Number (Low-High)</option>
+                    <option value="customerName">Customer (A-Z)</option>
+                </select>
+            </div>
+            <div class="flex flex-wrap gap-2">
+                <input id="dateFrom" type="date" class="p-2 border border-gray-300 rounded-lg text-sm" />
+                <input id="dateTo" type="date" class="p-2 border border-gray-300 rounded-lg text-sm" />
+                <button id="clearFilters"
+                    class="px-3 py-2 bg-blue-700 text-white rounded-xl shadow-lg text-sm hover:bg-blue-800 transition duration-200 ease-in-out transform hover:scale-[1.02] active:scale-[0.98] focus:outline-none focus:ring-4 focus:ring-blue-700 focus:ring-opacity-50">
+                    Clear Filters
+                </button>
+            </div>
+        </div>
+
+        <!-- Form Fields -->
+        <div class="shadow-md rounded-xl p-2 bg-white mobile-compact-spacing">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label for="orderNumber" class="block text-xs font-semibold mb-1 header-gradient">Order Number / IBT Number</label>
+                    <input id="orderNumber" type="text" placeholder="1234567" maxlength="7"
+                        class="w-full mobile-touch-input border border-gray-300 rounded-lg shadow-inner text-sm" />
                 </div>
-                <div class="w-32">
-                    <label for="wireListStatusFilter" class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Filter Status</label>
-                    <select id="wireListStatusFilter"
-                        class="w-full p-2 border border-gray-300 rounded-lg bg-white text-sm">
-                        <option value="active">Active</option>
-                        <option value="completed">Completed</option>
-                        <option value="removed">Removed</option>
-                        <option value="all">All</option>
+                <div>
+                    <label for="entryType" class="block text-xs font-semibold mb-1 header-gradient">Entry Type</label>
+                    <select id="entryType" class="w-full mobile-touch-input border border-gray-300 rounded-lg shadow-inner text-sm bg-white">
+                        <option value="IBT">IBT</option>
+                        <option value="CITY CALL">CITY CALL</option>
+                        <option value="CUSTOMER ORDER">CUSTOMER ORDER</option>
+                        <option value="SHIPPING">SHIPPING</option>
+                        <option value="EECOL VAN">EECOL VAN</option>
                     </select>
                 </div>
             </div>
+            <label class="inline-flex items-center mt-2">
+                <input type="checkbox" id="batchEntryMode"
+                    class="form-checkbox h-5 w-5 text-blue-600" />
+                <span class="ml-2 text-sm font-semibold header-gradient">Batch Entry Mode (Multiple Cuts)</span>
+            </label>
+        </div>
 
-            <div id="wireCutListItems" class="space-y-3 min-h-[100px]">
-                <!-- List items will be dynamically added here -->
-                <p class="text-center text-gray-400 py-10 italic">No items found in the list.</p>
+        <div class="shadow-md rounded-xl p-2 bg-white mobile-compact-spacing">
+            <label for="customerName" class="block text-xs font-semibold mb-1 header-gradient">Customer Name / Branch</label>
+            <input id="customerName" type="text" placeholder="EECOL Customer Name / EECOL Branch"
+                class="w-full mobile-touch-input border border-gray-300 rounded-lg shadow-inner text-sm" />
+        </div>
+
+        <div class="shadow-md rounded-xl p-2 bg-white mobile-compact-spacing">
+            <label for="orderComments" class="block text-xs font-semibold mb-1 header-gradient">Order Comments</label>
+            <input id="orderComments" type="text"
+                placeholder="e.g., Damaged Wire, Under Shipment / Over Shipment"
+                class="w-full mobile-touch-input border border-gray-300 rounded-lg shadow-inner text-sm" />
+        </div>
+
+        <div class="shadow-md rounded-xl p-2 bg-white mobile-compact-spacing" id="wireIdContainer">
+            <label for="wireId" class="block text-xs font-semibold mb-1 header-gradient">Wire Type / ID</label>
+            <input id="wireId" type="text" placeholder="TK6/3CU 1KV / ACWU90 6/3 AL"
+                class="w-full mobile-touch-input border border-gray-300 rounded-lg shadow-inner text-sm"
+                list="wireIdOptions" required />
+            <datalist id="wireIdOptions"></datalist>
+        </div>
+
+        <!-- Cut Details -->
+        <div id="singleCutForm" class="space-y-4">
+            <div class="shadow-md rounded-xl p-2 bg-white">
+                <label for="cutLength" class="block text-xs font-semibold mb-1 header-gradient">Length Cut</label>
+                <div class="flex space-x-1">
+                    <input id="cutLength" type="number" placeholder="How many units was the cut" value=""
+                        class="w-full p-2 border border-gray-300 rounded-lg shadow-inner text-sm"
+                        required />
+                    <select id="cutLengthUnit"
+                        class="w-auto p-2 border border-gray-300 rounded-lg bg-white shadow-sm font-medium header-gradient text-sm">
+                        <option value="m">Meters (m)</option>
+                        <option value="ft">Feet (ft)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="shadow-md rounded-xl p-2 bg-white">
+                <div class="mb-2">
+                    <button id="importFromCalculatorBtn"
+                        class="w-full px-3 py-2 bg-emerald-600 text-white text-sm font-bold rounded-lg hover:bg-emerald-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition duration-200">
+                        📥 Import from Calculator (Mark or Stop)
+                    </button>
+                </div>
+                <label for="startingMark" class="block text-xs font-semibold mb-1 header-gradient">Starting Mark</label>
+                <div class="flex items-center space-x-1">
+                    <input id="startingMark" type="number" placeholder="What was the starting unit" value=""
+                        class="w-full p-2 border border-gray-300 rounded-lg shadow-inner text-sm" />
+                    <select id="startingMarkUnit"
+                        class="w-auto p-2 border border-gray-300 rounded-lg bg-white shadow-sm font-medium header-gradient text-sm">
+                        <option value="m">Meters (m)</option>
+                        <option value="ft">Feet (ft)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="shadow-md rounded-xl p-2 bg-white">
+                <label for="endingMark" class="block text-xs font-semibold mb-1 header-gradient">Ending Mark</label>
+                <div class="flex items-center space-x-1">
+                    <input id="endingMark" type="number" placeholder="Leave blank for single unit cuts"
+                        value=""
+                        class="w-full p-2 border border-gray-300 rounded-lg shadow-inner text-sm" />
+                    <select id="endingMarkUnit"
+                        class="w-auto p-2 border border-gray-300 rounded-lg bg-gray-100 shadow-sm font-medium header-gradient text-sm"
+                        disabled>
+                        <option value="m">Meters (m)</option>
+                        <option value="ft">Feet (ft)</option>
+                    </select>
+                </div>
+                <p class="text-xs text-gray-500 mt-1">Uses the same unit as Starting Mark. Leave blank for single unit cuts</p>
+            </div>
+            <div class="shadow-md rounded-xl p-2 bg-white">
+                <label class="flex items-center space-x-2">
+                    <input id="singleUnitCut" type="checkbox"
+                        class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500" />
+                    <span class="text-xs font-semibold header-gradient">Single Unit Cut</span>
+                </label>
+            </div>
+            <div class="shadow-md rounded-xl p-2 bg-white">
+                <label class="flex items-center space-x-2">
+                    <input id="fullPick" type="checkbox"
+                        class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500" />
+                    <span class="text-xs font-semibold header-gradient">Full Pick</span>
+                </label>
+            </div>
+            <div class="shadow-md rounded-xl p-2 bg-white">
+                <label class="flex items-center space-x-2">
+                    <input id="noMarks" type="checkbox"
+                        class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500" />
+                    <span class="text-xs font-semibold header-gradient">No Marks</span>
+                </label>
+            </div>
+            <div class="shadow-md rounded-xl p-2 bg-white">
+                <label class="flex items-center space-x-2">
+                    <input id="systemCut" type="checkbox"
+                        class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500" />
+                    <span class="text-xs font-semibold header-gradient">System Cut</span>
+                </label>
+            </div>
+            <div class="shadow-md rounded-xl p-2 bg-white">
+                <label class="flex items-center space-x-2">
+                    <input id="cutInSystem" type="checkbox"
+                        class="w-4 h-4 text-purple-600 bg-gray-100 border-gray-300 rounded focus:ring-purple-500" />
+                    <span class="text-xs font-semibold header-gradient">Cut In System</span>
+                </label>
+            </div>
+            <div class="shadow-md rounded-xl p-2 bg-white">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="lineCode" class="block text-xs font-semibold mb-1 header-gradient">Cut From Line Code</label>
+                        <input id="lineCode" type="text" placeholder="001 or A" maxlength="3"
+                            class="w-full p-2 border border-gray-300 rounded-lg shadow-inner text-sm"
+                            required />
+                    </div>
+                    <div>
+                        <label for="turnedToLineCode"
+                            class="block text-xs font-semibold mb-1 header-gradient">Turned To Line Code</label>
+                        <input id="turnedToLineCode" type="text" placeholder="001 or A" maxlength="3"
+                            class="w-full p-2 border border-gray-300 rounded-lg shadow-inner text-sm"
+                            required />
+                    </div>
+                </div>
+            </div>
+            <div class="shadow-md rounded-xl p-2 bg-white">
+                <label for="cutterName" class="block text-xs font-semibold mb-1 header-gradient">Cutter Name</label>
+                <input id="cutterName" type="text" placeholder="Employee Name"
+                    class="w-full p-2 border border-gray-300 rounded-lg shadow-inner text-sm" required />
+            </div>
+            <div class="flex flex-col gap-4">
+                <div class="shadow-md rounded-xl p-2 bg-white flex-1">
+                    <label for="coilOrReel" class="block text-xs font-semibold mb-1 header-gradient">Coil or Reel</label>
+                    <select id="coilOrReel"
+                        class="w-full p-2 border border-gray-300 rounded-lg bg-white text-gray-900 shadow-sm font-medium header-gradient text-sm">
+                        <option value="coil">Coil</option>
+                        <option value="reel">Reel</option>
+                    </select>
+                </div>
+                <div class="shadow-md rounded-xl p-2 bg-white flex-1">
+                    <label for="reelSize" class="block text-xs font-semibold mb-1 header-gradient">Reel Size</label>
+                    <div class="flex items-center space-x-2">
+                        <input id="reelSize" type="number" placeholder="40" min="0" step="1"
+                            class="flex-grow p-2 border border-gray-300 rounded-lg shadow-inner text-sm bg-gray-100" />
+                        <button id="importFromEstimatorBtn"
+                            class="px-2 py-0 bg-emerald-600 text-white text-xs font-bold rounded hover:bg-emerald-700 disabled:bg-gray-400 disabled:cursor-not-allowed">
+                            📥 Import
+                        </button>
+                    </div>
+                </div>
+                <div class="shadow-md rounded-xl p-2 bg-white flex-1">
+                    <label for="chargeable"
+                        class="block text-xs font-semibold mb-1 header-gradient">Chargeable</label>
+                    <select id="chargeable"
+                        class="w-full p-2 border border-gray-300 rounded-lg bg-white text-gray-900 shadow-sm font-medium header-gradient text-sm">
+                        <option value="">Select...</option>
+                        <option value="yes">Yes</option>
+                        <option value="no">No</option>
+                    </select>
+                </div>
+            </div>
+            <button id="recordCutBtn" class="w-full py-4 bg-blue-700 text-white rounded-xl font-bold text-lg shadow-xl hover:bg-blue-800 transition transform hover:scale-[1.01] active:scale-[0.99]">
+                🚀 Record Wire Cut
+            </button>
+        </div>
+
+        <div id="batchCutForm"
+            class="hidden space-y-4 bg-white p-4 rounded-xl shadow-md border border-gray-100">
+            <h3 class="text-lg font-semibold mb-2 header-gradient">Batch Cut Entries</h3>
+            <div id="batchCutList"
+                class="space-y-2 max-h-64 overflow-y-auto border border-gray-200 p-2 rounded"></div>
+            <div class="flex gap-2">
+                <button id="addBatchCutBtn"
+                    class="flex-1 px-4 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 text-sm font-bold">Add Cut</button>
+                <button id="submitBatchBtn"
+                    class="flex-1 px-4 py-2 bg-blue-700 text-white rounded hover:bg-blue-800 text-sm font-bold">🚀 Record Batch</button>
             </div>
         </div>
     </div>
 
-    <!-- Add Item Modal -->
-    <div id="addModal" class="fixed inset-0 bg-black/40 hidden items-center justify-center z-50">
-        <div class="bg-white p-6 rounded-xl w-full max-w-md text-xs shadow-2xl">
-            <h3 class="text-xl font-bold mb-6 header-gradient">Add Wire Cut Item</h3>
+    <!-- Add/Edit Item Modal -->
+    <div id="addModal" class="fixed inset-0 modal-overlay hidden items-center justify-center z-50">
+        <div class="custom-modal p-8 text-xs relative">
+            <div class="flex flex-col items-center mb-6">
+                <div class="w-16 h-16 bg-blue-700 rounded-full flex items-center justify-center text-white font-bold text-3xl mb-4">E</div>
+                <h3 id="modalTitle" class="text-2xl font-bold text-blue-900">Edit Wire Cut List Item</h3>
+            </div>
 
-            <div class="space-y-4">
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="block font-bold text-gray-600 mb-1">Order Number</label>
-                        <input id="modalOrderNumber" placeholder="e.g. 1234567" class="w-full p-2.5 border rounded-lg shadow-inner text-sm">
-                    </div>
-                    <div>
-                        <label class="block font-bold text-gray-600 mb-1">Line Number</label>
-                        <input id="modalLineNumber" placeholder="e.g. 1" class="w-full p-2.5 border rounded-lg shadow-inner text-sm">
-                    </div>
+            <div class="grid grid-cols-2 gap-4 mb-4 overflow-y-auto max-h-[60vh] p-1">
+                <div>
+                    <label class="block font-bold text-gray-700 mb-1">Order #</label>
+                    <input id="modalOrderNumber" class="w-full p-2 border border-gray-300 rounded-lg text-sm">
                 </div>
                 <div>
-                    <label class="block font-bold text-gray-600 mb-1">Customer Name</label>
-                    <input id="modalCustomer" placeholder="Customer or Branch" class="w-full p-2.5 border rounded-lg shadow-inner text-sm">
+                    <label class="block font-bold text-gray-700 mb-1">Entry Type</label>
+                    <select id="modalEntryType" class="w-full p-2 border border-gray-300 rounded-lg text-sm bg-white">
+                        <option value="IBT">IBT</option>
+                        <option value="CITY CALL">CITY CALL</option>
+                        <option value="CUSTOMER ORDER">CUSTOMER ORDER</option>
+                        <option value="SHIPPING">SHIPPING</option>
+                        <option value="EECOL VAN">EECOL VAN</option>
+                    </select>
                 </div>
                 <div>
-                    <label class="block font-bold text-gray-600 mb-1">Ship Via</label>
-                    <input id="modalShipVia" placeholder="e.g. Courier, Will Call" class="w-full p-2.5 border rounded-lg shadow-inner text-sm">
+                    <label class="block font-bold text-gray-700 mb-1">Line #</label>
+                    <input id="modalLineNumber" class="w-full p-2 border border-gray-300 rounded-lg text-sm">
                 </div>
                 <div>
-                    <label class="block font-bold text-gray-600 mb-1">Wire Description</label>
-                    <textarea id="modalWireDescription" placeholder="TK6/3CU 1KV / ACWU90 6/3 AL" class="w-full p-2.5 border rounded-lg shadow-inner text-sm h-20"></textarea>
+                    <label class="block font-bold text-gray-700 mb-1">Customer</label>
+                    <input id="modalCustomer" class="w-full p-2 border border-gray-300 rounded-lg text-sm">
                 </div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="block font-bold text-gray-600 mb-1">Order Comments</label>
-                        <input id="modalOrderComments" placeholder="Comments" class="w-full p-2.5 border rounded-lg shadow-inner text-sm">
-                    </div>
-                    <div>
-                        <label class="block font-bold text-gray-600 mb-1">Shipper Comments</label>
-                        <input id="modalShipperComments" placeholder="Shipper info" class="w-full p-2.5 border rounded-lg shadow-inner text-sm">
-                    </div>
+                <div>
+                    <label class="block font-bold text-gray-700 mb-1">Wire Type</label>
+                    <input id="modalWireType" class="w-full p-2 border border-gray-300 rounded-lg text-sm">
+                </div>
+                <div>
+                    <label class="block font-bold text-gray-700 mb-1">Length (Z)</label>
+                    <input id="modalLengthZ" type="number" class="w-full p-2 border border-gray-300 rounded-lg text-sm">
+                </div>
+                <div>
+                    <label class="block font-bold text-gray-700 mb-1">Urgency</label>
+                    <select id="modalUrgency" class="w-full p-2 border border-gray-300 rounded-lg text-sm bg-white">
+                        <option value="Normal">Normal</option>
+                        <option value="High">High</option>
+                        <option value="Urgent">Urgent</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block font-bold text-gray-700 mb-1">Status</label>
+                    <select id="modalStatus" class="w-full p-2 border border-gray-300 rounded-lg text-sm bg-white">
+                        <option value="active">Active</option>
+                        <option value="completed">Completed</option>
+                        <option value="archived">Archived</option>
+                    </select>
+                </div>
+                <div class="col-span-2">
+                    <label class="block font-bold text-gray-700 mb-1">Description</label>
+                    <input id="modalWireDescription" class="w-full p-2 border border-gray-300 rounded-lg text-sm">
+                </div>
+                <div class="col-span-2">
+                    <label class="block font-bold text-gray-700 mb-1">Order Comments</label>
+                    <textarea id="modalOrderComments" placeholder="Order comments..." class="w-full p-2 border border-gray-300 rounded-lg text-sm h-20"></textarea>
+                </div>
+                <div class="col-span-2">
+                    <label class="block font-bold text-gray-700 mb-1">Shipper Comments</label>
+                    <textarea id="modalShipperComments" placeholder="Shipper comments..." class="w-full p-2 border border-gray-300 rounded-lg text-sm h-20"></textarea>
                 </div>
             </div>
 
-            <div class="flex justify-end gap-3 mt-8">
-                <button onclick="closeModal()" class="px-5 py-2.5 border border-gray-300 rounded-lg font-bold text-gray-600 hover:bg-gray-50 transition">Cancel</button>
-                <button onclick="saveItem()" class="px-5 py-2.5 bg-blue-700 text-white rounded-lg font-bold hover:bg-blue-800 transition shadow-md">Save Item</button>
+            <div class="flex justify-center gap-4 mt-8">
+                <button onclick="closeModal()" class="px-8 py-3 bg-slate-600 text-white rounded-xl font-bold hover:bg-slate-700 transition shadow-lg">Cancel</button>
+                <button id="modalSaveBtn" onclick="saveItem()" class="px-8 py-3 bg-amber-600 text-white rounded-xl font-bold hover:bg-amber-700 transition shadow-lg">Save Item</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Reason for Removal Modal -->
+    <div id="archiveModal" class="fixed inset-0 modal-overlay hidden items-center justify-center z-[60]">
+        <div class="custom-modal archive-modal p-8 text-xs relative">
+            <div class="flex flex-col items-center mb-6">
+                <div class="w-16 h-16 bg-blue-700 rounded-full flex items-center justify-center text-white font-bold text-3xl mb-4">E</div>
+                <h3 class="text-2xl font-bold text-blue-900">Reason for Removal</h3>
+            </div>
+
+            <p class="text-center text-gray-600 mb-6 text-sm">Please provide a reason why this item is being removed from the active list.</p>
+
+            <textarea id="removalReason" placeholder="e.g., Customer cancelled, incorrect wire type specified..." class="w-full p-4 border-2 border-black rounded-xl text-sm h-40 mb-8 focus:border-red-500 focus:ring-0"></textarea>
+
+            <div class="flex justify-center gap-4">
+                <button onclick="closeArchiveModal()" class="px-8 py-3 bg-slate-600 text-white rounded-xl font-bold hover:bg-slate-700 transition shadow-lg">Cancel</button>
+                <button onclick="confirmArchive()" class="px-8 py-3 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700 transition shadow-lg">Archive Item</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right-Click Context Menu -->
+    <div id="contextMenu" class="context-menu">
+        <div class="context-menu-item" onclick="ctxEdit()">
+            <span>✏️</span> Edit
+        </div>
+        <div class="context-menu-item relative group" onmouseenter="showColorSubmenu()">
+            <span>🎨</span> Change Color
+            <span class="ml-auto">▶</span>
+            <div id="colorSubmenu" class="absolute left-full top-0 bg-white border border-gray-200 shadow-xl rounded-lg p-2 hidden min-w-[120px]">
+                <div class="context-menu-item" onclick="changeColor('white')"><div class="color-dot bg-white"></div> White</div>
+                <div class="context-menu-item" onclick="changeColor('#fef2f2')"><div class="color-dot bg-red-100"></div> Red</div>
+                <div class="context-menu-item" onclick="changeColor('#f0fdf4')"><div class="color-dot bg-green-100"></div> Green</div>
+                <div class="context-menu-item" onclick="changeColor('#eff6ff')"><div class="color-dot bg-blue-100"></div> Blue</div>
+                <div class="context-menu-item" onclick="changeColor('#fffbeb')"><div class="color-dot bg-yellow-100"></div> Yellow</div>
+            </div>
+        </div>
+        <div class="border-t border-gray-100 my-1"></div>
+        <div class="context-menu-item text-red-600" onclick="ctxRemoveFlat()">
+            <span>🗑️</span> Flat Removal
+        </div>
+        <div class="context-menu-item text-orange-600" onclick="ctxArchive()">
+            <span>📦</span> Archive
         </div>
     </div>
 
@@ -132,7 +496,7 @@
         ========================= */
         function openDB() {
             return new Promise((resolve, reject) => {
-                const req = indexedDB.open(DB_NAME, 3); // Version 3
+                const req = indexedDB.open(DB_NAME, 5); // Version 5
                 req.onupgradeneeded = e => {
                     const db = e.target.result;
                     if (!db.objectStoreNames.contains(TODO_STORE)) {
@@ -181,24 +545,24 @@
         function renderWireList() {
             listEl.innerHTML = '';
 
-            // Sort items by position if they have it, otherwise by createdAt
-            const sortedItems = [...wireListItems].sort((a, b) => {
-                if (a.position !== undefined && b.position !== undefined) {
-                    return a.position - b.position;
+            const filtered = wireListItems.filter(item => {
+                if (wireListStatusFilter === 'removed') {
+                    if (item.status !== 'archived' && item.status !== 'removed') return false;
+                } else if (wireListStatusFilter !== 'all' && item.status !== wireListStatusFilter) {
+                    return false;
                 }
-                return (a.createdAt || 0) - (b.createdAt || 0);
-            });
-
-            const filtered = sortedItems.filter(item => {
-                if (wireListStatusFilter !== 'all' && item.status !== wireListStatusFilter) return false;
 
                 if (wireListSearchTerm) {
                     const haystack = `
                         ${item.orderNumber}
+                        ${item.entryType}
                         ${item.lineNumber}
                         ${item.customer}
-                        ${item.shipVia}
+                        ${item.wireType}
                         ${item.wireDescription}
+                        ${item.orderComments}
+                        ${item.shipperComments}
+                        ${item.removalReason}
                     `.toLowerCase();
                     if (!haystack.includes(wireListSearchTerm)) return false;
                 }
@@ -214,7 +578,8 @@
 
             filtered.forEach((item, index) => {
                 const el = document.createElement('div');
-                el.className = 'wire-list-item bg-white border border-gray-200 rounded-xl shadow-sm p-4 relative cursor-move transition hover:border-blue-300 hover:shadow-md';
+                el.className = 'wire-list-item border border-gray-200 rounded-xl shadow-sm p-4 relative cursor-move transition hover:border-blue-300 hover:shadow-md';
+                el.style.backgroundColor = item.color || 'white';
                 el.draggable = true;
                 el.dataset.id = item.id;
                 el.dataset.index = index;
@@ -227,7 +592,10 @@
                             </div>
                             <div>
                                 <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Order / Line</span>
-                                <div class="text-base font-black text-gray-800">${item.orderNumber || 'N/A'} / ${item.lineNumber || 'N/A'}</div>
+                                <div class="text-base font-black text-gray-800">
+                                    ${item.orderNumber || 'N/A'} / ${item.lineNumber || 'N/A'}
+                                    ${item.entryType ? `<span class="ml-2 bg-amber-100 text-amber-800 text-[10px] px-1.5 py-0.5 rounded border border-amber-200">${item.entryType}</span>` : ''}
+                                </div>
                             </div>
                         </div>
                         <div class="text-right">
@@ -236,28 +604,33 @@
                         </div>
                     </div>
 
-                    <div class="bg-gray-50 p-3 rounded-lg border border-gray-100 mb-3">
+                    <div class="bg-white/50 backdrop-blur-sm p-3 rounded-lg border border-black/5 mb-3">
                         <div class="flex justify-between items-center mb-1">
-                            <span class="font-black text-blue-800 text-[10px] uppercase tracking-widest">${item.shipVia || 'Standard Shipping'}</span>
+                            <span class="font-black text-blue-800 text-[10px] uppercase tracking-widest">${item.wireType || 'Wire Type: N/A'}</span>
+                            <span class="bg-blue-100 text-blue-800 text-[10px] font-bold px-1.5 rounded">${item.lengthZ || '0'} Z</span>
                         </div>
-                        <p class="text-sm font-medium text-gray-700">${item.wireDescription || 'No description provided'}</p>
+                        <p class="text-sm font-medium text-gray-700 mb-1">${item.wireDescription || 'No description'}</p>
+                        <div class="flex items-center gap-2">
+                             <span class="text-[10px] font-bold uppercase ${item.urgency === 'Urgent' ? 'text-red-600' : item.urgency === 'High' ? 'text-orange-600' : 'text-gray-400'}">${item.urgency || 'Normal'} Urgency</span>
+                        </div>
                     </div>
 
                     <div class="flex flex-wrap gap-2 mb-3">
                         ${item.orderComments ? `<span class="bg-red-50 text-red-600 text-[10px] font-bold px-2 py-1 rounded border border-red-100">💬 ${item.orderComments}</span>` : ''}
                         ${item.shipperComments ? `<span class="bg-blue-50 text-blue-600 text-[10px] font-bold px-2 py-1 rounded border border-blue-100">🚚 ${item.shipperComments}</span>` : ''}
+                        ${item.status === 'archived' && item.removalReason ? `<span class="bg-gray-100 text-gray-600 text-[10px] font-bold px-2 py-1 rounded border border-gray-200">📦 Reason: ${item.removalReason}</span>` : ''}
                     </div>
 
-                    <div class="flex justify-end gap-2 pt-3 border-t border-gray-50">
+                    <div class="flex justify-end gap-2 pt-3 border-t border-black/5">
                         ${item.status === 'active' ? `
                             <button class="px-4 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 transition shadow-sm"
-                                onclick="completeItem('${item.id}')">✅ Complete</button>
+                                onclick="event.stopPropagation(); completeItem('${item.id}')">✅ Complete</button>
                             <button class="px-4 py-1.5 bg-rose-600 text-white rounded-lg text-xs font-bold hover:bg-rose-700 transition shadow-sm"
-                                onclick="softRemoveItem('${item.id}')">❌ Remove</button>
+                                onclick="event.stopPropagation(); openArchiveModal('${item.id}')">❌ Remove</button>
                         ` : ''}
                         ${item.status !== 'active' ? `
                             <button class="px-4 py-1.5 bg-gray-500 text-white rounded-lg text-xs font-bold hover:bg-gray-600 transition shadow-sm"
-                                onclick="restoreItem('${item.id}')">🔄 Restore</button>
+                                onclick="event.stopPropagation(); restoreItem('${item.id}')">🔄 Restore</button>
                         ` : ''}
                     </div>
                 `;
@@ -270,10 +643,14 @@
 
                 el.oncontextmenu = e => {
                     e.preventDefault();
-                    if (confirm('Permanently delete this item from the database?')) {
-                        removeHard(TODO_STORE, item.id).then(loadAndRenderTodoList);
-                    }
+                    contextItemId = item.id;
+                    contextMenu.style.display = 'block';
+                    contextMenu.style.left = e.clientX + 'px';
+                    contextMenu.style.top = e.clientY + 'px';
+                    colorSubmenu.classList.add('hidden');
                 };
+
+                el.onclick = () => openEditModal(item);
 
                 listEl.appendChild(el);
             });
@@ -327,23 +704,36 @@
         }
 
         async function loadAndRenderTodoList() {
-            wireListItems = await getAll(TODO_STORE);
+            const items = await getAll(TODO_STORE);
+            // Always sort by position immediately after fetching
+            wireListItems = items.sort((a, b) => {
+                if (a.position !== undefined && b.position !== undefined) {
+                    return a.position - b.position;
+                }
+                return (a.createdAt || 0) - (b.createdAt || 0);
+            });
             renderWireList();
         }
 
+        let editingItemId = null;
+
         function saveItem() {
             const item = {
-                id: crypto.randomUUID(),
+                id: editingItemId || crypto.randomUUID(),
                 orderNumber: document.getElementById('modalOrderNumber').value,
+                entryType: document.getElementById('modalEntryType').value,
                 lineNumber: document.getElementById('modalLineNumber').value,
                 customer: document.getElementById('modalCustomer').value,
-                shipVia: document.getElementById('modalShipVia').value,
+                wireType: document.getElementById('modalWireType').value,
+                lengthZ: document.getElementById('modalLengthZ').value,
+                urgency: document.getElementById('modalUrgency').value,
+                status: document.getElementById('modalStatus').value,
                 wireDescription: document.getElementById('modalWireDescription').value,
                 orderComments: document.getElementById('modalOrderComments').value,
                 shipperComments: document.getElementById('modalShipperComments').value,
-                status: 'active',
-                position: wireListItems.length,
-                createdAt: Date.now()
+                position: editingItemId ? (wireListItems.find(i => i.id === editingItemId)?.position ?? wireListItems.length) : wireListItems.length,
+                color: editingItemId ? (wireListItems.find(i => i.id === editingItemId)?.color ?? 'white') : 'white',
+                createdAt: editingItemId ? (wireListItems.find(i => i.id === editingItemId)?.createdAt ?? Date.now()) : Date.now()
             };
             save(TODO_STORE, item).then(() => {
                 closeModal();
@@ -353,17 +743,95 @@
         }
 
         function clearModalFields() {
-            ['modalOrderNumber', 'modalLineNumber', 'modalCustomer', 'modalShipVia', 'modalWireDescription', 'modalOrderComments', 'modalShipperComments'].forEach(id => {
-                document.getElementById(id).value = '';
-            });
+            const fields = [
+                'modalOrderNumber', 'modalLineNumber', 'modalCustomer', 'modalWireType',
+                'modalLengthZ', 'modalWireDescription', 'modalOrderComments', 'modalShipperComments'
+            ];
+            fields.forEach(id => document.getElementById(id).value = '');
+            document.getElementById('modalUrgency').value = 'Normal';
+            document.getElementById('modalStatus').value = 'active';
+            document.getElementById('modalEntryType').value = 'IBT';
+            editingItemId = null;
         }
+
+        function openEditModal(item) {
+            editingItemId = item.id;
+            document.getElementById('modalTitle').textContent = 'Edit Wire Cut List Item';
+            document.getElementById('modalOrderNumber').value = item.orderNumber || '';
+            document.getElementById('modalEntryType').value = item.entryType || 'IBT';
+            document.getElementById('modalLineNumber').value = item.lineNumber || '';
+            document.getElementById('modalCustomer').value = item.customer || '';
+            document.getElementById('modalWireType').value = item.wireType || '';
+            document.getElementById('modalLengthZ').value = item.lengthZ || '';
+            document.getElementById('modalUrgency').value = item.urgency || 'Normal';
+            document.getElementById('modalStatus').value = item.status || 'active';
+            document.getElementById('modalWireDescription').value = item.wireDescription || '';
+            document.getElementById('modalOrderComments').value = item.orderComments || '';
+            document.getElementById('modalShipperComments').value = item.shipperComments || '';
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function saveRecordCut(singleItem = null) {
+            const commonData = {
+                orderNumber: document.getElementById('orderNumber').value,
+                entryType: document.getElementById('entryType').value,
+                customer: document.getElementById('customerName').value,
+                orderComments: document.getElementById('orderComments').value,
+                wireType: document.getElementById('wireId').value,
+                lineCode: document.getElementById('lineCode').value,
+                turnedToLineCode: document.getElementById('turnedToLineCode').value,
+                cutterName: document.getElementById('cutterName').value,
+                coilOrReel: document.getElementById('coilOrReel').value,
+                reelSize: document.getElementById('reelSize').value,
+                chargeable: document.getElementById('chargeable').value,
+                timestamp: Date.now()
+            };
+
+            const itemsToSave = [];
+            if (singleItem) {
+                itemsToSave.push({ ...commonData, ...singleItem, id: crypto.randomUUID() });
+            } else if (document.getElementById('batchEntryMode').checked) {
+                batchCuts.forEach(cut => {
+                    itemsToSave.push({ ...commonData, ...cut, id: crypto.randomUUID() });
+                });
+            } else {
+                const cutData = {
+                    length: document.getElementById('cutLength').value,
+                    unit: document.getElementById('cutLengthUnit').value,
+                    startMark: document.getElementById('startingMark').value,
+                    endMark: document.getElementById('endingMark').value,
+                    singleUnit: document.getElementById('singleUnitCut').checked,
+                    fullPick: document.getElementById('fullPick').checked,
+                    noMarks: document.getElementById('noMarks').checked,
+                    systemCut: document.getElementById('systemCut').checked,
+                    cutInSystem: document.getElementById('cutInSystem').checked
+                };
+                itemsToSave.push({ ...commonData, ...cutData, id: crypto.randomUUID() });
+            }
+
+            // In a real app, this might go to a 'history' store.
+            // For now, we'll focus on persistence logic if required.
+            console.log('Recording cuts:', itemsToSave);
+            alert(`${itemsToSave.length} cut(s) recorded successfully!`);
+
+            // Clear record form
+            if (document.getElementById('batchEntryMode').checked) {
+                batchCuts = [];
+                updateBatchUI();
+            }
+        }
+
+        document.getElementById('recordCutBtn').onclick = () => saveRecordCut();
+        document.getElementById('submitBatchBtn').onclick = () => saveRecordCut();
 
         function completeItem(id) {
             updateItemStatus(id, 'completed');
         }
 
         function softRemoveItem(id) {
-            updateItemStatus(id, 'removed');
+            openArchiveModal(id);
         }
 
         function restoreItem(id) {
@@ -383,13 +851,97 @@
             modal.classList.remove('flex');
         }
 
+        let archiveItemId = null;
+        const archiveModal = document.getElementById('archiveModal');
+
+        function openArchiveModal(id) {
+            archiveItemId = id;
+            archiveModal.classList.remove('hidden');
+            archiveModal.classList.add('flex');
+        }
+
+        function closeArchiveModal() {
+            archiveModal.classList.add('hidden');
+            archiveModal.classList.remove('flex');
+            document.getElementById('removalReason').value = '';
+            archiveItemId = null;
+        }
+
+        function confirmArchive() {
+            const reason = document.getElementById('removalReason').value;
+            if (!reason) return alert('Please provide a reason for removal.');
+
+            const item = wireListItems.find(i => i.id === archiveItemId);
+            if (!item) return;
+
+            item.status = 'archived';
+            item.removalReason = reason;
+            item.archivedAt = Date.now();
+
+            save(TODO_STORE, item).then(() => {
+                closeArchiveModal();
+                loadAndRenderTodoList();
+            });
+        }
+
         /* =========================
            Events
         ========================= */
         document.getElementById('addWireListItemBtn').onclick = () => {
+            document.getElementById('modalTitle').textContent = 'Add Wire Cut List Item';
+            clearModalFields();
             modal.classList.remove('hidden');
             modal.classList.add('flex');
         };
+
+        /* =========================
+           Context Menu Handlers
+        ========================= */
+        const contextMenu = document.getElementById('contextMenu');
+        const colorSubmenu = document.getElementById('colorSubmenu');
+        let contextItemId = null;
+
+        function showColorSubmenu() {
+            colorSubmenu.classList.remove('hidden');
+        }
+
+        function hideContextMenu() {
+            contextMenu.style.display = 'none';
+            colorSubmenu.classList.add('hidden');
+            contextItemId = null;
+        }
+
+        window.onclick = () => hideContextMenu();
+        window.onscroll = () => hideContextMenu();
+
+        function ctxEdit() {
+            const item = wireListItems.find(i => i.id === contextItemId);
+            if (item) openEditModal(item);
+            hideContextMenu();
+        }
+
+        async function changeColor(color) {
+            const item = wireListItems.find(i => i.id === contextItemId);
+            if (item) {
+                item.color = color;
+                await save(TODO_STORE, item);
+                renderWireList();
+            }
+            hideContextMenu();
+        }
+
+        async function ctxRemoveFlat() {
+            if (confirm('Permanently delete this item? This cannot be undone.')) {
+                await removeHard(TODO_STORE, contextItemId);
+                await loadAndRenderTodoList();
+            }
+            hideContextMenu();
+        }
+
+        function ctxArchive() {
+            openArchiveModal(contextItemId);
+            hideContextMenu();
+        }
 
         document.getElementById('refreshWireListBtn').onclick = loadAndRenderTodoList;
 
@@ -402,6 +954,76 @@
             wireListStatusFilter = e.target.value;
             renderWireList();
         });
+
+        /* =========================
+           Batch Logic
+        ========================= */
+        let batchCuts = [];
+
+        function updateBatchUI() {
+            const container = document.getElementById('batchCutList');
+            container.innerHTML = '';
+
+            if (!batchCuts.length) {
+                container.innerHTML = '<p class="text-center text-gray-400 italic py-4">No cuts added to batch yet.</p>';
+            }
+
+            batchCuts.forEach((cut, idx) => {
+                const div = document.createElement('div');
+                div.className = 'flex items-center justify-between p-2 bg-gray-50 rounded border border-gray-200 text-xs';
+                div.innerHTML = `
+                    <div class="flex-1">
+                        <span class="font-bold text-blue-700">#${idx+1}</span>
+                        <span class="ml-2">${cut.length}${cut.unit}</span>
+                        <span class="ml-2 text-gray-500">(${cut.startMark || '0'} → ${cut.endMark || '?'})</span>
+                    </div>
+                    <button onclick="removeBatchCut(${idx})" class="text-red-500 font-bold hover:text-red-700 px-2">✕</button>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function removeBatchCut(idx) {
+            batchCuts.splice(idx, 1);
+            updateBatchUI();
+        }
+
+        document.getElementById('batchEntryMode').addEventListener('change', e => {
+            const isBatch = e.target.checked;
+            document.getElementById('recordCutBtn').classList.toggle('hidden', isBatch);
+            document.getElementById('batchCutForm').classList.toggle('hidden', !isBatch);
+        });
+
+        document.getElementById('addBatchCutBtn').onclick = () => {
+            const length = document.getElementById('cutLength').value;
+            if (!length) return alert('Please enter a length before adding to batch.');
+
+            batchCuts.push({
+                length: length,
+                unit: document.getElementById('cutLengthUnit').value,
+                startMark: document.getElementById('startingMark').value,
+                endMark: document.getElementById('endingMark').value,
+                singleUnit: document.getElementById('singleUnitCut').checked,
+                fullPick: document.getElementById('fullPick').checked,
+                noMarks: document.getElementById('noMarks').checked,
+                systemCut: document.getElementById('systemCut').checked,
+                cutInSystem: document.getElementById('cutInSystem').checked
+            });
+            updateBatchUI();
+        };
+
+        /* =========================
+           Collapsible Wire List
+        ========================= */
+        const toggleBtn = document.getElementById('toggleWireList');
+        const content = document.getElementById('wireListContent');
+        const toggleIcon = document.getElementById('wireListToggle');
+
+        toggleBtn.onclick = () => {
+            const isHidden = content.classList.contains('hidden');
+            content.classList.toggle('hidden');
+            toggleIcon.textContent = isHidden ? '▼' : '►';
+        };
 
         /* =========================
            Init
