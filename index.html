@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>EECOL – Wire Cut List</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .header-gradient {
+            background: linear-gradient(90deg, #1e40af 0%, #1e3a8a 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: bold;
+        }
+        .wire-list-item.dragging {
+            opacity: 0.5;
+            border: 2px dashed #3b82f6;
+        }
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            ring: 2px;
+            ring-color: #3b82f6;
+            border-color: #3b82f6;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 p-4 text-xs">
+
+    <div class="max-w-2xl mx-auto space-y-6">
+        <!-- Main Wire Cut List -->
+        <div class="p-4 bg-white border border-gray-200 rounded-xl shadow-lg">
+            <div class="flex justify-between items-center mb-4 pb-2 border-b">
+                <h1 class="text-xl font-bold header-gradient">🗂️ Wire Cut List</h1>
+                <div class="flex gap-2">
+                    <button id="addWireListItemBtn"
+                        class="px-3 py-1.5 bg-blue-700 text-white rounded-lg hover:bg-blue-800 transition font-bold shadow-md">
+                        + Add Item
+                    </button>
+                    <button id="refreshWireListBtn"
+                        class="px-3 py-1.5 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-bold">
+                        🔄 Refresh
+                    </button>
+                </div>
+            </div>
+
+            <div class="flex flex-wrap gap-3 mb-6 bg-gray-50 p-3 rounded-lg border border-gray-100">
+                <div class="flex-1 min-w-[150px]">
+                    <label for="wireListSearch" class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Search List</label>
+                    <input id="wireListSearch" type="text" placeholder="Search order, customer, wire..."
+                        class="w-full p-2 border border-gray-300 rounded-lg bg-white text-sm">
+                </div>
+                <div class="w-32">
+                    <label for="wireListStatusFilter" class="block text-[10px] font-bold text-gray-500 uppercase mb-1">Filter Status</label>
+                    <select id="wireListStatusFilter"
+                        class="w-full p-2 border border-gray-300 rounded-lg bg-white text-sm">
+                        <option value="active">Active</option>
+                        <option value="completed">Completed</option>
+                        <option value="removed">Removed</option>
+                        <option value="all">All</option>
+                    </select>
+                </div>
+            </div>
+
+            <div id="wireCutListItems" class="space-y-3 min-h-[100px]">
+                <!-- List items will be dynamically added here -->
+                <p class="text-center text-gray-400 py-10 italic">No items found in the list.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Item Modal -->
+    <div id="addModal" class="fixed inset-0 bg-black/40 hidden items-center justify-center z-50">
+        <div class="bg-white p-6 rounded-xl w-full max-w-md text-xs shadow-2xl">
+            <h3 class="text-xl font-bold mb-6 header-gradient">Add Wire Cut Item</h3>
+
+            <div class="space-y-4">
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-bold text-gray-600 mb-1">Order Number</label>
+                        <input id="modalOrderNumber" placeholder="e.g. 1234567" class="w-full p-2.5 border rounded-lg shadow-inner text-sm">
+                    </div>
+                    <div>
+                        <label class="block font-bold text-gray-600 mb-1">Line Number</label>
+                        <input id="modalLineNumber" placeholder="e.g. 1" class="w-full p-2.5 border rounded-lg shadow-inner text-sm">
+                    </div>
+                </div>
+                <div>
+                    <label class="block font-bold text-gray-600 mb-1">Customer Name</label>
+                    <input id="modalCustomer" placeholder="Customer or Branch" class="w-full p-2.5 border rounded-lg shadow-inner text-sm">
+                </div>
+                <div>
+                    <label class="block font-bold text-gray-600 mb-1">Ship Via</label>
+                    <input id="modalShipVia" placeholder="e.g. Courier, Will Call" class="w-full p-2.5 border rounded-lg shadow-inner text-sm">
+                </div>
+                <div>
+                    <label class="block font-bold text-gray-600 mb-1">Wire Description</label>
+                    <textarea id="modalWireDescription" placeholder="TK6/3CU 1KV / ACWU90 6/3 AL" class="w-full p-2.5 border rounded-lg shadow-inner text-sm h-20"></textarea>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-bold text-gray-600 mb-1">Order Comments</label>
+                        <input id="modalOrderComments" placeholder="Comments" class="w-full p-2.5 border rounded-lg shadow-inner text-sm">
+                    </div>
+                    <div>
+                        <label class="block font-bold text-gray-600 mb-1">Shipper Comments</label>
+                        <input id="modalShipperComments" placeholder="Shipper info" class="w-full p-2.5 border rounded-lg shadow-inner text-sm">
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-3 mt-8">
+                <button onclick="closeModal()" class="px-5 py-2.5 border border-gray-300 rounded-lg font-bold text-gray-600 hover:bg-gray-50 transition">Cancel</button>
+                <button onclick="saveItem()" class="px-5 py-2.5 bg-blue-700 text-white rounded-lg font-bold hover:bg-blue-800 transition shadow-md">Save Item</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /* =========================
+           Constants & State
+        ========================= */
+        const DB_NAME = 'eecol_wire_cut_list';
+        const TODO_STORE = 'items';
+        let db;
+
+        let wireListItems = [];
+        let wireListSearchTerm = '';
+        let wireListStatusFilter = 'active';
+
+        /* =========================
+           IndexedDB
+        ========================= */
+        function openDB() {
+            return new Promise((resolve, reject) => {
+                const req = indexedDB.open(DB_NAME, 3); // Version 3
+                req.onupgradeneeded = e => {
+                    const db = e.target.result;
+                    if (!db.objectStoreNames.contains(TODO_STORE)) {
+                        db.createObjectStore(TODO_STORE, { keyPath: 'id' });
+                    }
+                };
+                req.onsuccess = e => {
+                    db = e.target.result;
+                    resolve();
+                };
+                req.onerror = e => reject(e.target.error);
+            });
+        }
+
+        function getAll(storeName) {
+            return new Promise(res => {
+                const r = db.transaction(storeName).objectStore(storeName).getAll();
+                r.onsuccess = () => res(r.result);
+            });
+        }
+
+        function save(storeName, item) {
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(storeName, 'readwrite');
+                tx.objectStore(storeName).put(item);
+                tx.oncomplete = () => resolve();
+                tx.onerror = () => reject(tx.error);
+            });
+        }
+
+        function removeHard(storeName, id) {
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(storeName, 'readwrite');
+                tx.objectStore(storeName).delete(id);
+                tx.oncomplete = () => resolve();
+                tx.onerror = () => reject(tx.error);
+            });
+        }
+
+        /* =========================
+           Wire Cut List UI
+        ========================= */
+        const listEl = document.getElementById('wireCutListItems');
+        const modal = document.getElementById('addModal');
+
+        function renderWireList() {
+            listEl.innerHTML = '';
+
+            // Sort items by position if they have it, otherwise by createdAt
+            const sortedItems = [...wireListItems].sort((a, b) => {
+                if (a.position !== undefined && b.position !== undefined) {
+                    return a.position - b.position;
+                }
+                return (a.createdAt || 0) - (b.createdAt || 0);
+            });
+
+            const filtered = sortedItems.filter(item => {
+                if (wireListStatusFilter !== 'all' && item.status !== wireListStatusFilter) return false;
+
+                if (wireListSearchTerm) {
+                    const haystack = `
+                        ${item.orderNumber}
+                        ${item.lineNumber}
+                        ${item.customer}
+                        ${item.shipVia}
+                        ${item.wireDescription}
+                    `.toLowerCase();
+                    if (!haystack.includes(wireListSearchTerm)) return false;
+                }
+
+                return true;
+            });
+
+            if (!filtered.length) {
+                listEl.innerHTML =
+                    `<p class="text-center text-gray-400 py-10 italic">No items found.</p>`;
+                return;
+            }
+
+            filtered.forEach((item, index) => {
+                const el = document.createElement('div');
+                el.className = 'wire-list-item bg-white border border-gray-200 rounded-xl shadow-sm p-4 relative cursor-move transition hover:border-blue-300 hover:shadow-md';
+                el.draggable = true;
+                el.dataset.id = item.id;
+                el.dataset.index = index;
+
+                el.innerHTML = `
+                    <div class="flex justify-between items-start mb-3">
+                        <div class="flex gap-3">
+                            <div class="bg-blue-50 text-blue-700 w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm">
+                                ${index + 1}
+                            </div>
+                            <div>
+                                <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Order / Line</span>
+                                <div class="text-base font-black text-gray-800">${item.orderNumber || 'N/A'} / ${item.lineNumber || 'N/A'}</div>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Customer</span>
+                            <div class="text-xs font-bold text-gray-700">${item.customer || 'N/A'}</div>
+                        </div>
+                    </div>
+
+                    <div class="bg-gray-50 p-3 rounded-lg border border-gray-100 mb-3">
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="font-black text-blue-800 text-[10px] uppercase tracking-widest">${item.shipVia || 'Standard Shipping'}</span>
+                        </div>
+                        <p class="text-sm font-medium text-gray-700">${item.wireDescription || 'No description provided'}</p>
+                    </div>
+
+                    <div class="flex flex-wrap gap-2 mb-3">
+                        ${item.orderComments ? `<span class="bg-red-50 text-red-600 text-[10px] font-bold px-2 py-1 rounded border border-red-100">💬 ${item.orderComments}</span>` : ''}
+                        ${item.shipperComments ? `<span class="bg-blue-50 text-blue-600 text-[10px] font-bold px-2 py-1 rounded border border-blue-100">🚚 ${item.shipperComments}</span>` : ''}
+                    </div>
+
+                    <div class="flex justify-end gap-2 pt-3 border-t border-gray-50">
+                        ${item.status === 'active' ? `
+                            <button class="px-4 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 transition shadow-sm"
+                                onclick="completeItem('${item.id}')">✅ Complete</button>
+                            <button class="px-4 py-1.5 bg-rose-600 text-white rounded-lg text-xs font-bold hover:bg-rose-700 transition shadow-sm"
+                                onclick="softRemoveItem('${item.id}')">❌ Remove</button>
+                        ` : ''}
+                        ${item.status !== 'active' ? `
+                            <button class="px-4 py-1.5 bg-gray-500 text-white rounded-lg text-xs font-bold hover:bg-gray-600 transition shadow-sm"
+                                onclick="restoreItem('${item.id}')">🔄 Restore</button>
+                        ` : ''}
+                    </div>
+                `;
+
+                // Drag & Drop Listeners
+                el.addEventListener('dragstart', handleDragStart);
+                el.addEventListener('dragover', handleDragOver);
+                el.addEventListener('drop', handleDrop);
+                el.addEventListener('dragend', handleDragEnd);
+
+                el.oncontextmenu = e => {
+                    e.preventDefault();
+                    if (confirm('Permanently delete this item from the database?')) {
+                        removeHard(TODO_STORE, item.id).then(loadAndRenderTodoList);
+                    }
+                };
+
+                listEl.appendChild(el);
+            });
+        }
+
+        /* =========================
+           Drag & Drop Handlers
+        ========================= */
+        let dragSrcId = null;
+
+        function handleDragStart(e) {
+            dragSrcId = this.dataset.id;
+            this.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            return false;
+        }
+
+        async function handleDrop(e) {
+            e.stopPropagation();
+            const targetId = this.dataset.id;
+            if (dragSrcId === targetId) return;
+
+            const srcIndex = wireListItems.findIndex(i => i.id === dragSrcId);
+            const targetIndex = wireListItems.findIndex(i => i.id === targetId);
+
+            const [movedItem] = wireListItems.splice(srcIndex, 1);
+            wireListItems.splice(targetIndex, 0, movedItem);
+
+            // Update positions
+            wireListItems.forEach((item, idx) => {
+                item.position = idx;
+            });
+
+            // Persist all changes
+            const tx = db.transaction(TODO_STORE, 'readwrite');
+            const store = tx.objectStore(TODO_STORE);
+            wireListItems.forEach(item => store.put(item));
+
+            tx.oncomplete = () => renderWireList();
+        }
+
+        function handleDragEnd() {
+            this.classList.remove('dragging');
+            const items = document.querySelectorAll('.wire-list-item');
+            items.forEach(item => item.classList.remove('dragging'));
+        }
+
+        async function loadAndRenderTodoList() {
+            wireListItems = await getAll(TODO_STORE);
+            renderWireList();
+        }
+
+        function saveItem() {
+            const item = {
+                id: crypto.randomUUID(),
+                orderNumber: document.getElementById('modalOrderNumber').value,
+                lineNumber: document.getElementById('modalLineNumber').value,
+                customer: document.getElementById('modalCustomer').value,
+                shipVia: document.getElementById('modalShipVia').value,
+                wireDescription: document.getElementById('modalWireDescription').value,
+                orderComments: document.getElementById('modalOrderComments').value,
+                shipperComments: document.getElementById('modalShipperComments').value,
+                status: 'active',
+                position: wireListItems.length,
+                createdAt: Date.now()
+            };
+            save(TODO_STORE, item).then(() => {
+                closeModal();
+                loadAndRenderTodoList();
+                clearModalFields();
+            });
+        }
+
+        function clearModalFields() {
+            ['modalOrderNumber', 'modalLineNumber', 'modalCustomer', 'modalShipVia', 'modalWireDescription', 'modalOrderComments', 'modalShipperComments'].forEach(id => {
+                document.getElementById(id).value = '';
+            });
+        }
+
+        function completeItem(id) {
+            updateItemStatus(id, 'completed');
+        }
+
+        function softRemoveItem(id) {
+            updateItemStatus(id, 'removed');
+        }
+
+        function restoreItem(id) {
+            updateItemStatus(id, 'active');
+        }
+
+        async function updateItemStatus(id, status) {
+            const item = wireListItems.find(i => i.id === id);
+            if (!item) return;
+            item.status = status;
+            await save(TODO_STORE, item);
+            renderWireList();
+        }
+
+        function closeModal() {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        /* =========================
+           Events
+        ========================= */
+        document.getElementById('addWireListItemBtn').onclick = () => {
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        };
+
+        document.getElementById('refreshWireListBtn').onclick = loadAndRenderTodoList;
+
+        document.getElementById('wireListSearch').addEventListener('input', e => {
+            wireListSearchTerm = e.target.value.toLowerCase();
+            renderWireList();
+        });
+
+        document.getElementById('wireListStatusFilter').addEventListener('change', e => {
+            wireListStatusFilter = e.target.value;
+            renderWireList();
+        });
+
+        /* =========================
+           Init
+        ========================= */
+        openDB().then(loadAndRenderTodoList);
+    </script>
+</body>
+</html>
