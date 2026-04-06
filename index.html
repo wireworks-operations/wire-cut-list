@@ -22,7 +22,7 @@
             opacity: 0.5;
             border: 2px dashed #3b82f6;
         }
-        input:focus, select:focus, textarea:focus {
+        input:focus, select:focus, textarea:focus, button:focus-visible {
             outline: none;
             border-color: #3b82f6;
             box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
@@ -82,9 +82,11 @@
         <!-- Wire Cut List (Collapsible) -->
         <div class="p-3 bg-gradient-to-r from-yellow-50 to-amber-50 border border-yellow-200 rounded-lg shadow-md">
             <button id="toggleWireList"
-                class="w-full text-left font-semibold text-yellow-800 flex justify-between items-center">
+                class="w-full text-left font-semibold text-yellow-800 flex justify-between items-center"
+                aria-expanded="false"
+                aria-controls="wireListContent">
                 <span>🗂️ Wire Cut List</span>
-                <span id="wireListToggle">►</span>
+                <span id="wireListToggle" aria-hidden="true">►</span>
             </button>
             <div id="wireListContent" class="mt-2 text-xs space-y-2 hidden">
                 <div class="flex justify-between items-center flex-wrap gap-2">
@@ -479,7 +481,47 @@
         </div>
     </div>
 
+    <!-- Toast Notification Container -->
+    <div id="toastContainer" class="fixed bottom-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none" aria-live="polite" role="status"></div>
+
     <script>
+        /* =========================
+           Toast System
+        ========================= */
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+
+            const bgColors = {
+                success: 'bg-emerald-600',
+                error: 'bg-rose-600',
+                info: 'bg-blue-700'
+            };
+
+            toast.className = `${bgColors[type] || bgColors.info} text-white px-4 py-3 rounded-xl shadow-lg flex items-center gap-3 transition-all duration-300 transform translate-y-10 opacity-0 pointer-events-auto min-w-[200px] max-w-sm`;
+
+            const icon = type === 'success' ? '✅' : type === 'error' ? '❌' : 'ℹ️';
+
+            toast.innerHTML = `
+                <span class="text-lg">${icon}</span>
+                <span class="font-bold text-sm"></span>
+            `;
+            toast.querySelector('.font-bold').textContent = message;
+
+            container.appendChild(toast);
+
+            // Trigger animation
+            requestAnimationFrame(() => {
+                toast.classList.remove('translate-y-10', 'opacity-0');
+            });
+
+            // Auto-remove
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'scale-95');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
         /* =========================
            Constants & State
         ========================= */
@@ -814,7 +856,7 @@
             // In a real app, this might go to a 'history' store.
             // For now, we'll focus on persistence logic if required.
             console.log('Recording cuts:', itemsToSave);
-            alert(`${itemsToSave.length} cut(s) recorded successfully!`);
+            showToast(`${itemsToSave.length} cut(s) recorded successfully!`, 'success');
 
             // Clear record form
             if (document.getElementById('batchEntryMode').checked) {
@@ -869,7 +911,7 @@
 
         function confirmArchive() {
             const reason = document.getElementById('removalReason').value;
-            if (!reason) return alert('Please provide a reason for removal.');
+            if (!reason) return showToast('Please provide a reason for removal.', 'error');
 
             const item = wireListItems.find(i => i.id === archiveItemId);
             if (!item) return;
@@ -996,7 +1038,7 @@
 
         document.getElementById('addBatchCutBtn').onclick = () => {
             const length = document.getElementById('cutLength').value;
-            if (!length) return alert('Please enter a length before adding to batch.');
+            if (!length) return showToast('Please enter a length before adding to batch.', 'error');
 
             batchCuts.push({
                 length: length,
@@ -1023,6 +1065,7 @@
             const isHidden = content.classList.contains('hidden');
             content.classList.toggle('hidden');
             toggleIcon.textContent = isHidden ? '▼' : '►';
+            toggleBtn.setAttribute('aria-expanded', isHidden);
         };
 
         /* =========================
