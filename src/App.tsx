@@ -30,7 +30,10 @@ import {
   Download,
   Settings,
   Copy,
-  Check
+  Check,
+  Database,
+  Eye,
+  ArrowLeft
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -65,6 +68,70 @@ interface Settings {
   showInfoToasts: boolean;
   showErrorToasts: boolean;
 }
+
+// --- IndexedDB Utility ---
+
+const DB_NAME = 'eecol_wire_cut_list';
+const DB_VERSION = 1;
+const STORE_NAME = 'items';
+
+const openDB = (): Promise<IDBDatabase> => {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve(request.result);
+    request.onupgradeneeded = (event) => {
+      const db = (event.target as IDBOpenDBRequest).result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+      }
+    };
+  });
+};
+
+const getAllItemsDB = async (): Promise<WireItem[]> => {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(STORE_NAME, 'readonly');
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.getAll();
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+};
+
+const saveItemDB = async (item: WireItem): Promise<void> => {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(STORE_NAME, 'readwrite');
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.put(item);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
+};
+
+const deleteItemDB = async (id: string): Promise<void> => {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(STORE_NAME, 'readwrite');
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.delete(id);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
+};
+
+const clearAllItemsDB = async (): Promise<void> => {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(STORE_NAME, 'readwrite');
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.clear();
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
+};
 
 // --- Constants ---
 
@@ -131,19 +198,59 @@ export default function App() {
   const [archivingId, setArchivingId] = useState<string | null>(null);
   const [removalReason, setRemovalReason] = useState('');
 
+  // Database Inspection
+  const [showDBInspection, setShowDBInspection] = useState(false);
+  const [dbRecords, setDbRecords] = useState<WireItem[]>([]);
+
+  const fetchDBRecords = async () => {
+    const records = await getAllItemsDB();
+    setDbRecords(records.sort((a, b) => b.createdAt - a.createdAt));
+  };
+
+  const handleDeleteFromDB = async (id: string) => {
+    if (window.confirm('Delete this record from database permanently?')) {
+      await deleteItemDB(id);
+      setItems(prev => prev.filter(i => i.id !== id));
+      await fetchDBRecords();
+      addToast('Record deleted from database', 'error');
+    }
+  };
+
+  const handleClearDatabase = async () => {
+    if (window.confirm('WARNING: THIS WILL PERMANENTLY CLEAR ALL DATA FROM THE DATABASE. Proceed?')) {
+      await clearAllItemsDB();
+      setItems([]);
+      await fetchDBRecords();
+      addToast('Database cleared completely', 'error');
+    }
+  };
+
   // Context Menu
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, itemId: string } | null>(null);
 
   // --- Persistence ---
   useEffect(() => {
-    const savedItems = localStorage.getItem('eecol_wire_list');
-    if (savedItems) {
+    const initItems = async () => {
       try {
-        setItems(JSON.parse(savedItems));
+        const dbItems = await getAllItemsDB();
+        if (dbItems.length > 0) {
+          setItems(dbItems);
+        } else {
+          const savedItems = localStorage.getItem('eecol_wire_list');
+          if (savedItems) {
+            const parsed = JSON.parse(savedItems);
+            setItems(parsed);
+            // Migrate to IDB
+            for (const item of parsed) {
+              await saveItemDB(item);
+            }
+          }
+        }
       } catch (e) {
-        console.error("Failed to parse saved items", e);
+        console.error("Failed to fetch items from IndexedDB", e);
       }
-    }
+    };
+    initItems();
 
     const savedSettings = localStorage.getItem('eecol_wire_settings');
     if (savedSettings) {
@@ -155,9 +262,6 @@ export default function App() {
     }
   }, []);
 
-  useEffect(() => {
-    localStorage.setItem('eecol_wire_list', JSON.stringify(items));
-  }, [items]);
 
   useEffect(() => {
     localStorage.setItem('eecol_wire_settings', JSON.stringify(settings));
@@ -255,29 +359,44 @@ export default function App() {
     setExpandedIds(next);
   };
 
-  const handleBulkComplete = () => {
-    setItems(prev => prev.map(item => 
+  const handleBulkComplete = async () => {
+    const updatedItems = items.map(item =>
       selectedIds.has(item.id) ? { ...item, status: 'completed' } : item
-    ));
+    );
+    setItems(updatedItems);
+    for (const id of selectedIds) {
+      const item = updatedItems.find(i => i.id === id);
+      if (item) await saveItemDB(item);
+    }
     addToast(`Marked ${selectedIds.size} items as completed`, 'success');
     setSelectedIds(new Set());
   };
 
-  const handleBulkArchive = () => {
+  const handleBulkArchive = async () => {
     const reason = window.prompt('Enter reason for bulk removal:');
     if (reason === null) return;
     
-    setItems(prev => prev.map(item => 
+    const updatedItems = items.map(item =>
       selectedIds.has(item.id) ? { ...item, status: 'archived', removalReason: reason || 'Bulk removal' } : item
-    ));
+    );
+    setItems(updatedItems);
+    for (const id of selectedIds) {
+      const item = updatedItems.find(i => i.id === id);
+      if (item) await saveItemDB(item);
+    }
     addToast(`Archived ${selectedIds.size} items`, 'success');
     setSelectedIds(new Set());
   };
 
-  const handleBulkRestore = () => {
-    setItems(prev => prev.map(item => 
+  const handleBulkRestore = async () => {
+    const updatedItems = items.map(item =>
       selectedIds.has(item.id) ? { ...item, status: 'active' } : item
-    ));
+    );
+    setItems(updatedItems);
+    for (const id of selectedIds) {
+      const item = updatedItems.find(i => i.id === id);
+      if (item) await saveItemDB(item);
+    }
     addToast(`Restored ${selectedIds.size} items to active list`, 'success');
     setSelectedIds(new Set());
   };
@@ -327,7 +446,7 @@ export default function App() {
     addToast('CSV exported successfully', 'success');
   };
 
-  const handleSaveItem = (e: React.FormEvent) => {
+  const handleSaveItem = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingItem) return;
 
@@ -349,6 +468,7 @@ export default function App() {
       createdAt: editingItem.createdAt || Date.now(),
     };
 
+    await saveItemDB(newItem);
     if (editingItem.id) {
       setItems(prev => prev.map(item => item.id === newItem.id ? newItem : item));
       addToast('Item updated successfully', 'success');
@@ -361,31 +481,41 @@ export default function App() {
     setEditingItem(null);
   };
 
-  const handleComplete = (id: string) => {
-    setItems(prev => prev.map(item => item.id === id ? { ...item, status: 'completed' } : item));
+  const handleComplete = async (id: string) => {
+    const item = items.find(i => i.id === id);
+    if (!item) return;
+    const updatedItem = { ...item, status: 'completed' as Status };
+    await saveItemDB(updatedItem);
+    setItems(prev => prev.map(i => i.id === id ? updatedItem : i));
     addToast('Item marked as completed', 'success');
   };
 
-  const handleArchive = () => {
+  const handleArchive = async () => {
     if (!archivingId || !removalReason) {
       addToast('Please provide a reason for removal', 'error');
       return;
     }
-    setItems(prev => prev.map(item => 
-      item.id === archivingId ? { ...item, status: 'archived', removalReason } : item
-    ));
+    const item = items.find(i => i.id === archivingId);
+    if (!item) return;
+    const updatedItem = { ...item, status: 'archived' as Status, removalReason };
+    await saveItemDB(updatedItem);
+    setItems(prev => prev.map(i => i.id === archivingId ? updatedItem : i));
     addToast('Item archived', 'success');
     setIsArchiveModalOpen(false);
     setArchivingId(null);
     setRemovalReason('');
   };
 
-  const handleRestore = (id: string) => {
-    setItems(prev => prev.map(item => item.id === id ? { ...item, status: 'active' } : item));
+  const handleRestore = async (id: string) => {
+    const item = items.find(i => i.id === id);
+    if (!item) return;
+    const updatedItem = { ...item, status: 'active' as Status };
+    await saveItemDB(updatedItem);
+    setItems(prev => prev.map(i => i.id === id ? updatedItem : i));
     addToast('Item restored to active list', 'success');
   };
 
-  const handleDuplicate = (id: string) => {
+  const handleDuplicate = async (id: string) => {
     const original = items.find(i => i.id === id);
     if (!original) return;
     const newItem: WireItem = {
@@ -395,19 +525,25 @@ export default function App() {
       position: items.length,
       orderNumber: `${original.orderNumber} (Copy)`,
     };
+    await saveItemDB(newItem);
     setItems(prev => [...prev, newItem]);
     addToast('Item duplicated', 'success');
   };
 
-  const handleRemoveFlat = (id: string) => {
+  const handleRemoveFlat = async (id: string) => {
     if (window.confirm('Permanently delete this item?')) {
+      await deleteItemDB(id);
       setItems(prev => prev.filter(item => item.id !== id));
       addToast('Item permanently deleted', 'error');
     }
   };
 
-  const handleColorChange = (id: string, color: string) => {
-    setItems(prev => prev.map(item => item.id === id ? { ...item, color } : item));
+  const handleColorChange = async (id: string, color: string) => {
+    const item = items.find(i => i.id === id);
+    if (!item) return;
+    const updatedItem = { ...item, color };
+    await saveItemDB(updatedItem);
+    setItems(prev => prev.map(i => i.id === id ? updatedItem : i));
     setContextMenu(null);
   };
 
@@ -418,7 +554,7 @@ export default function App() {
     setDraggedId(id);
   };
 
-  const onDragOver = (e: React.DragEvent, targetId: string) => {
+  const onDragOver = async (e: React.DragEvent, targetId: string) => {
     e.preventDefault();
     if (!draggedId || draggedId === targetId) return;
 
@@ -432,6 +568,16 @@ export default function App() {
     // Update positions
     const updatedItems = newItems.map((item, idx) => ({ ...item, position: idx }));
     setItems(updatedItems);
+
+    // Note: To be fully consistent, we should persist all updated positions to DB.
+    // This could be heavy, so maybe only on dragEnd.
+  };
+
+  const onDragEnd = async () => {
+    setDraggedId(null);
+    for (const item of items) {
+      await saveItemDB(item);
+    }
   };
 
   // --- Render ---
@@ -649,7 +795,7 @@ export default function App() {
                       draggable
                       onDragStart={() => onDragStart(item.id)}
                       onDragOver={(e) => onDragOver(e, item.id)}
-                      onDragEnd={() => setDraggedId(null)}
+                      onDragEnd={onDragEnd}
                       onContextMenu={(e) => {
                         e.preventDefault();
                         setContextMenu({ x: e.clientX, y: e.clientY, itemId: item.id });
@@ -676,33 +822,33 @@ export default function App() {
                       }`}
                       style={{ backgroundColor: item.color }}
                     >
-                      {/* Selection Checkbox */}
-                      <div 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleSelect(item.id);
-                        }}
-                        role="checkbox"
-                        aria-checked={selectedIds.has(item.id)}
-                        aria-label="Select item"
-                        tabIndex={0}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            toggleSelect(item.id);
-                          }
-                        }}
-                        className={`absolute top-4 right-4 w-6 h-6 rounded-lg flex items-center justify-center transition-all outline-none focus:ring-2 focus:ring-blue-400 ${
-                          selectedIds.has(item.id) ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-300 hover:bg-gray-200'
-                        }`}
-                      >
-                        {selectedIds.has(item.id) ? <CheckSquare size={16} /> : <Square size={16} />}
-                      </div>
-
                       {/* Item Header */}
                       <div className="flex justify-between items-start mb-3">
                         <div className="flex gap-3">
+                          {/* Selection Checkbox moved next to index */}
+                          <div
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleSelect(item.id);
+                            }}
+                            role="checkbox"
+                            aria-checked={selectedIds.has(item.id)}
+                            aria-label="Select item"
+                            tabIndex={0}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                toggleSelect(item.id);
+                              }
+                            }}
+                            className={`w-6 h-6 mt-1 rounded-lg flex items-center justify-center transition-all outline-none focus:ring-2 focus:ring-blue-400 shrink-0 ${
+                              selectedIds.has(item.id) ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-300 hover:bg-gray-200'
+                            }`}
+                          >
+                            {selectedIds.has(item.id) ? <CheckSquare size={16} /> : <Square size={16} />}
+                          </div>
+
                           <div className="bg-blue-50 text-blue-700 w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs shadow-inner">
                             {index + 1}
                           </div>
@@ -717,6 +863,9 @@ export default function App() {
                                   {item.entryType}
                                 </span>
                               )}
+                            </div>
+                            <div className="text-[10px] font-bold text-gray-500 mt-0.5">
+                              {new Date(item.createdAt).toLocaleDateString()} {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </div>
                           </div>
                         </div>
@@ -945,8 +1094,8 @@ export default function App() {
                     <input 
                       id="edit-customer"
                       value={editingItem?.customer || ''}
-                      onChange={e => setEditingItem(prev => ({ ...prev, customer: e.target.value }))}
-                      className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                      onChange={e => setEditingItem(prev => ({ ...prev, customer: e.target.value.toUpperCase() }))}
+                      className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none uppercase font-bold"
                     />
                   </div>
                   <div className="space-y-1">
@@ -954,8 +1103,8 @@ export default function App() {
                     <input 
                       id="edit-wire"
                       value={editingItem?.wireType || ''}
-                      onChange={e => setEditingItem(prev => ({ ...prev, wireType: e.target.value }))}
-                      className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                      onChange={e => setEditingItem(prev => ({ ...prev, wireType: e.target.value.toUpperCase() }))}
+                      className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none uppercase font-bold"
                     />
                   </div>
                   <div className="space-y-1">
@@ -1160,72 +1309,162 @@ export default function App() {
               initial={{ scale: 0.9, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              className="relative bg-white rounded-3xl shadow-2xl border-4 border-gray-600 w-full max-w-md p-8"
+              className={`relative bg-white rounded-3xl shadow-2xl border-4 border-gray-600 w-full transition-all duration-300 ${
+                showDBInspection ? 'max-w-4xl h-[80vh] overflow-hidden flex flex-col' : 'max-w-md p-8'
+              }`}
             >
-              <div className="flex flex-col items-center mb-8">
-                <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center text-gray-600 mb-4">
-                  <Settings size={32} />
-                </div>
-                <h3 className="text-2xl font-black text-gray-900 tracking-tighter uppercase">Application Settings</h3>
-              </div>
+              {!showDBInspection ? (
+                <>
+                  <div className="flex flex-col items-center mb-8">
+                    <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center text-gray-600 mb-4">
+                      <Settings size={32} />
+                    </div>
+                    <h3 className="text-2xl font-black text-gray-900 tracking-tighter uppercase">Application Settings</h3>
+                  </div>
 
-              <div className="space-y-6">
-                <div className="space-y-2">
-                  <label htmlFor="toast-duration" className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Toast Duration (ms)</label>
-                  <input 
-                    id="toast-duration"
-                    type="number"
-                    step="500"
-                    min="1000"
-                    max="10000"
-                    value={settings.toastDuration}
-                    onChange={e => setSettings(prev => ({ ...prev, toastDuration: parseInt(e.target.value) || 3000 }))}
-                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-gray-500 outline-none"
-                  />
-                </div>
+                  <div className="space-y-6">
+                    <div className="space-y-2">
+                      <label htmlFor="toast-duration" className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Toast Duration (ms)</label>
+                      <input 
+                        id="toast-duration"
+                        type="number"
+                        step="500"
+                        min="1000"
+                        max="10000"
+                        value={settings.toastDuration}
+                        onChange={e => setSettings(prev => ({ ...prev, toastDuration: parseInt(e.target.value) || 3000 }))}
+                        className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-gray-500 outline-none"
+                      />
+                    </div>
 
-                <div className="space-y-3">
-                  <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Notification Types</span>
-                  <div className="space-y-2">
-                    <label className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100 cursor-pointer hover:bg-gray-100 transition">
-                      <input 
-                        type="checkbox"
-                        checked={settings.showSuccessToasts}
-                        onChange={e => setSettings(prev => ({ ...prev, showSuccessToasts: e.target.checked }))}
-                        className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500"
-                      />
-                      <span className="text-xs font-bold text-gray-700">Show Success Alerts</span>
-                    </label>
-                    <label className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100 cursor-pointer hover:bg-gray-100 transition">
-                      <input 
-                        type="checkbox"
-                        checked={settings.showInfoToasts}
-                        onChange={e => setSettings(prev => ({ ...prev, showInfoToasts: e.target.checked }))}
-                        className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500"
-                      />
-                      <span className="text-xs font-bold text-gray-700">Show Info Alerts</span>
-                    </label>
-                    <label className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100 cursor-pointer hover:bg-gray-100 transition">
-                      <input 
-                        type="checkbox"
-                        checked={settings.showErrorToasts}
-                        onChange={e => setSettings(prev => ({ ...prev, showErrorToasts: e.target.checked }))}
-                        className="w-4 h-4 rounded text-rose-600 focus:ring-rose-500"
-                      />
-                      <span className="text-xs font-bold text-gray-700">Show Error Alerts</span>
-                    </label>
+                    <div className="space-y-3">
+                      <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Notification Types</span>
+                      <div className="space-y-2">
+                        <label className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100 cursor-pointer hover:bg-gray-100 transition">
+                          <input
+                            type="checkbox"
+                            checked={settings.showSuccessToasts}
+                            onChange={e => setSettings(prev => ({ ...prev, showSuccessToasts: e.target.checked }))}
+                            className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500"
+                          />
+                          <span className="text-xs font-bold text-gray-700">Show Success Alerts</span>
+                        </label>
+                        <label className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100 cursor-pointer hover:bg-gray-100 transition">
+                          <input
+                            type="checkbox"
+                            checked={settings.showInfoToasts}
+                            onChange={e => setSettings(prev => ({ ...prev, showInfoToasts: e.target.checked }))}
+                            className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500"
+                          />
+                          <span className="text-xs font-bold text-gray-700">Show Info Alerts</span>
+                        </label>
+                        <label className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100 cursor-pointer hover:bg-gray-100 transition">
+                          <input
+                            type="checkbox"
+                            checked={settings.showErrorToasts}
+                            onChange={e => setSettings(prev => ({ ...prev, showErrorToasts: e.target.checked }))}
+                            className="w-4 h-4 rounded text-rose-600 focus:ring-rose-500"
+                          />
+                          <span className="text-xs font-bold text-gray-700">Show Error Alerts</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    <div className="pt-4 border-t border-gray-100">
+                      <button
+                        onClick={() => {
+                          fetchDBRecords();
+                          setShowDBInspection(true);
+                        }}
+                        className="w-full flex items-center justify-center gap-3 p-4 bg-blue-50 text-blue-700 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-blue-100 transition border-2 border-blue-100 shadow-sm"
+                      >
+                        <Database size={16} /> Database Inspection
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-center mt-8">
+                    <button
+                      onClick={() => setIsSettingsModalOpen(false)}
+                      className="px-12 py-3 bg-gray-900 text-white rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-black transition shadow-lg"
+                    >
+                      Done
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="flex flex-col h-full">
+                  {/* Inspection Header */}
+                  <div className="p-6 bg-gray-50 border-b border-gray-200 flex items-center justify-between shrink-0">
+                    <div className="flex items-center gap-4">
+                      <button
+                        onClick={() => setShowDBInspection(false)}
+                        className="p-2 hover:bg-gray-200 rounded-full transition"
+                      >
+                        <ArrowLeft size={20} />
+                      </button>
+                      <h3 className="text-xl font-black text-gray-900 uppercase tracking-tighter">Database Records</h3>
+                    </div>
+                    <button
+                      onClick={handleClearDatabase}
+                      className="px-4 py-2 bg-rose-600 text-white text-[10px] font-black uppercase rounded-xl hover:bg-rose-700 transition shadow-md shadow-rose-100"
+                    >
+                      Clear Database
+                    </button>
+                  </div>
+
+                  {/* Table Content */}
+                  <div className="flex-1 overflow-auto p-4 custom-scrollbar">
+                    <table className="w-full text-left border-collapse min-w-[800px]">
+                      <thead className="sticky top-0 bg-white z-10">
+                        <tr className="border-b-2 border-gray-100">
+                          <th className="p-3 text-[10px] font-black text-gray-400 uppercase tracking-widest">Order / Line</th>
+                          <th className="p-3 text-[10px] font-black text-gray-400 uppercase tracking-widest">Customer</th>
+                          <th className="p-3 text-[10px] font-black text-gray-400 uppercase tracking-widest">Wire Type</th>
+                          <th className="p-3 text-[10px] font-black text-gray-400 uppercase tracking-widest">Length</th>
+                          <th className="p-3 text-[10px] font-black text-gray-400 uppercase tracking-widest">Created At</th>
+                          <th className="p-3 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        {dbRecords.map(record => (
+                          <tr key={record.id} className="hover:bg-blue-50/30 transition-colors group">
+                            <td className="p-3">
+                              <div className="font-bold text-xs text-gray-800">{record.orderNumber} / {record.lineNumber}</div>
+                              <div className="text-[9px] font-bold text-blue-600">{record.entryType}</div>
+                            </td>
+                            <td className="p-3 text-xs font-bold text-gray-600 uppercase">{record.customer}</td>
+                            <td className="p-3 text-xs font-bold text-gray-600 uppercase">{record.wireType}</td>
+                            <td className="p-3 text-xs font-black text-blue-700">{record.lengthZ} Z</td>
+                            <td className="p-3 text-[10px] font-medium text-gray-400">
+                              {new Date(record.createdAt).toLocaleDateString()}<br/>
+                              {new Date(record.createdAt).toLocaleTimeString()}
+                            </td>
+                            <td className="p-3 text-center">
+                              <button
+                                onClick={() => handleDeleteFromDB(record.id)}
+                                className="p-2 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                                title="Delete from database"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {dbRecords.length === 0 && (
+                      <div className="py-20 text-center text-gray-400 italic text-sm">
+                        No records found in the database.
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="p-6 bg-gray-50 border-t border-gray-200 text-center shrink-0">
+                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-[0.2em]">Showing {dbRecords.length} records</p>
                   </div>
                 </div>
-              </div>
-
-              <div className="flex justify-center mt-8">
-                <button 
-                  onClick={() => setIsSettingsModalOpen(false)} 
-                  className="px-12 py-3 bg-gray-900 text-white rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-black transition shadow-lg"
-                >
-                  Done
-                </button>
-              </div>
+              )}
             </motion.div>
           </div>
         )}
