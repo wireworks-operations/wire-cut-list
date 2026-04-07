@@ -41,7 +41,7 @@ jobs:
       - name: Build
         run: npm run build
         env:
-          VITE_BASE_PATH: "/wire-organizationwire-cut-list/"
+          VITE_BASE_PATH: "/wire-cut-list/"
       - name: Setup Pages
         uses: actions/configure-pages@v4
       - name: Upload artifact
