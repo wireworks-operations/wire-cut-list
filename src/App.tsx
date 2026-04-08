@@ -72,7 +72,7 @@ interface Settings {
 // --- IndexedDB Utility ---
 
 const DB_NAME = 'eecol_wire_cut_list';
-const DB_VERSION = 1;
+const DB_VERSION = 5;
 const STORE_NAME = 'items';
 
 const openDB = (): Promise<IDBDatabase> => {
@@ -101,36 +101,51 @@ const getAllItemsDB = async (): Promise<WireItem[]> => {
 };
 
 const saveItemDB = async (item: WireItem): Promise<void> => {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(STORE_NAME, 'readwrite');
-    const store = transaction.objectStore(STORE_NAME);
-    const request = store.put(item);
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error);
-  });
+  try {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(STORE_NAME, 'readwrite');
+      const store = transaction.objectStore(STORE_NAME);
+      const request = store.put(item);
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  } catch (e) {
+    console.error("Failed to save item to IndexedDB", e);
+    throw e;
+  }
 };
 
 const deleteItemDB = async (id: string): Promise<void> => {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(STORE_NAME, 'readwrite');
-    const store = transaction.objectStore(STORE_NAME);
-    const request = store.delete(id);
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error);
-  });
+  try {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(STORE_NAME, 'readwrite');
+      const store = transaction.objectStore(STORE_NAME);
+      const request = store.delete(id);
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  } catch (e) {
+    console.error("Failed to delete item from IndexedDB", e);
+    throw e;
+  }
 };
 
 const clearAllItemsDB = async (): Promise<void> => {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(STORE_NAME, 'readwrite');
-    const store = transaction.objectStore(STORE_NAME);
-    const request = store.clear();
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error);
-  });
+  try {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(STORE_NAME, 'readwrite');
+      const store = transaction.objectStore(STORE_NAME);
+      const request = store.clear();
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  } catch (e) {
+    console.error("Failed to clear IndexedDB", e);
+    throw e;
+  }
 };
 
 // --- Constants ---
@@ -363,13 +378,18 @@ export default function App() {
     const updatedItems = items.map(item =>
       selectedIds.has(item.id) ? { ...item, status: 'completed' } : item
     );
-    setItems(updatedItems);
-    for (const id of selectedIds) {
-      const item = updatedItems.find(i => i.id === id);
-      if (item) await saveItemDB(item);
+
+    try {
+      for (const id of selectedIds) {
+        const item = updatedItems.find(i => i.id === id);
+        if (item) await saveItemDB(item);
+      }
+      setItems(updatedItems);
+      addToast(`Marked ${selectedIds.size} items as completed`, 'success');
+      setSelectedIds(new Set());
+    } catch (error) {
+      addToast('Failed to complete some items. Please try again.', 'error');
     }
-    addToast(`Marked ${selectedIds.size} items as completed`, 'success');
-    setSelectedIds(new Set());
   };
 
   const handleBulkArchive = async () => {
@@ -379,26 +399,36 @@ export default function App() {
     const updatedItems = items.map(item =>
       selectedIds.has(item.id) ? { ...item, status: 'archived', removalReason: reason || 'Bulk removal' } : item
     );
-    setItems(updatedItems);
-    for (const id of selectedIds) {
-      const item = updatedItems.find(i => i.id === id);
-      if (item) await saveItemDB(item);
+
+    try {
+      for (const id of selectedIds) {
+        const item = updatedItems.find(i => i.id === id);
+        if (item) await saveItemDB(item);
+      }
+      setItems(updatedItems);
+      addToast(`Archived ${selectedIds.size} items`, 'success');
+      setSelectedIds(new Set());
+    } catch (error) {
+      addToast('Failed to archive some items. Please try again.', 'error');
     }
-    addToast(`Archived ${selectedIds.size} items`, 'success');
-    setSelectedIds(new Set());
   };
 
   const handleBulkRestore = async () => {
     const updatedItems = items.map(item =>
       selectedIds.has(item.id) ? { ...item, status: 'active' } : item
     );
-    setItems(updatedItems);
-    for (const id of selectedIds) {
-      const item = updatedItems.find(i => i.id === id);
-      if (item) await saveItemDB(item);
+
+    try {
+      for (const id of selectedIds) {
+        const item = updatedItems.find(i => i.id === id);
+        if (item) await saveItemDB(item);
+      }
+      setItems(updatedItems);
+      addToast(`Restored ${selectedIds.size} items to active list`, 'success');
+      setSelectedIds(new Set());
+    } catch (error) {
+      addToast('Failed to restore some items. Please try again.', 'error');
     }
-    addToast(`Restored ${selectedIds.size} items to active list`, 'success');
-    setSelectedIds(new Set());
   };
 
   const exportToCSV = () => {
@@ -468,26 +498,34 @@ export default function App() {
       createdAt: editingItem.createdAt || Date.now(),
     };
 
-    await saveItemDB(newItem);
-    if (editingItem.id) {
-      setItems(prev => prev.map(item => item.id === newItem.id ? newItem : item));
-      addToast('Item updated successfully', 'success');
-    } else {
-      setItems(prev => [...prev, newItem]);
-      addToast('Item added successfully', 'success');
-    }
+    try {
+      await saveItemDB(newItem);
+      if (editingItem.id) {
+        setItems(prev => prev.map(item => item.id === newItem.id ? newItem : item));
+        addToast('Item updated successfully', 'success');
+      } else {
+        setItems(prev => [...prev, newItem]);
+        addToast('Item added successfully', 'success');
+      }
 
-    setIsEditModalOpen(false);
-    setEditingItem(null);
+      setIsEditModalOpen(false);
+      setEditingItem(null);
+    } catch (error) {
+      addToast('Failed to save item. Please try again.', 'error');
+    }
   };
 
   const handleComplete = async (id: string) => {
     const item = items.find(i => i.id === id);
     if (!item) return;
     const updatedItem = { ...item, status: 'completed' as Status };
-    await saveItemDB(updatedItem);
-    setItems(prev => prev.map(i => i.id === id ? updatedItem : i));
-    addToast('Item marked as completed', 'success');
+    try {
+      await saveItemDB(updatedItem);
+      setItems(prev => prev.map(i => i.id === id ? updatedItem : i));
+      addToast('Item marked as completed', 'success');
+    } catch (error) {
+      addToast('Failed to mark as completed.', 'error');
+    }
   };
 
   const handleArchive = async () => {
@@ -498,21 +536,29 @@ export default function App() {
     const item = items.find(i => i.id === archivingId);
     if (!item) return;
     const updatedItem = { ...item, status: 'archived' as Status, removalReason };
-    await saveItemDB(updatedItem);
-    setItems(prev => prev.map(i => i.id === archivingId ? updatedItem : i));
-    addToast('Item archived', 'success');
-    setIsArchiveModalOpen(false);
-    setArchivingId(null);
-    setRemovalReason('');
+    try {
+      await saveItemDB(updatedItem);
+      setItems(prev => prev.map(i => i.id === archivingId ? updatedItem : i));
+      addToast('Item archived', 'success');
+      setIsArchiveModalOpen(false);
+      setArchivingId(null);
+      setRemovalReason('');
+    } catch (error) {
+      addToast('Failed to archive item.', 'error');
+    }
   };
 
   const handleRestore = async (id: string) => {
     const item = items.find(i => i.id === id);
     if (!item) return;
     const updatedItem = { ...item, status: 'active' as Status };
-    await saveItemDB(updatedItem);
-    setItems(prev => prev.map(i => i.id === id ? updatedItem : i));
-    addToast('Item restored to active list', 'success');
+    try {
+      await saveItemDB(updatedItem);
+      setItems(prev => prev.map(i => i.id === id ? updatedItem : i));
+      addToast('Item restored to active list', 'success');
+    } catch (error) {
+      addToast('Failed to restore item.', 'error');
+    }
   };
 
   const handleDuplicate = async (id: string) => {
@@ -525,16 +571,24 @@ export default function App() {
       position: items.length,
       orderNumber: `${original.orderNumber} (Copy)`,
     };
-    await saveItemDB(newItem);
-    setItems(prev => [...prev, newItem]);
-    addToast('Item duplicated', 'success');
+    try {
+      await saveItemDB(newItem);
+      setItems(prev => [...prev, newItem]);
+      addToast('Item duplicated', 'success');
+    } catch (error) {
+      addToast('Failed to duplicate item.', 'error');
+    }
   };
 
   const handleRemoveFlat = async (id: string) => {
     if (window.confirm('Permanently delete this item?')) {
-      await deleteItemDB(id);
-      setItems(prev => prev.filter(item => item.id !== id));
-      addToast('Item permanently deleted', 'error');
+      try {
+        await deleteItemDB(id);
+        setItems(prev => prev.filter(item => item.id !== id));
+        addToast('Item permanently deleted', 'error');
+      } catch (error) {
+        addToast('Failed to delete item.', 'error');
+      }
     }
   };
 
@@ -542,9 +596,13 @@ export default function App() {
     const item = items.find(i => i.id === id);
     if (!item) return;
     const updatedItem = { ...item, color };
-    await saveItemDB(updatedItem);
-    setItems(prev => prev.map(i => i.id === id ? updatedItem : i));
-    setContextMenu(null);
+    try {
+      await saveItemDB(updatedItem);
+      setItems(prev => prev.map(i => i.id === id ? updatedItem : i));
+      setContextMenu(null);
+    } catch (error) {
+      addToast('Failed to update color.', 'error');
+    }
   };
 
   // --- Drag and Drop ---
