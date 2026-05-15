@@ -854,7 +854,7 @@ export default function App() {
                     <p className="text-gray-400 italic text-sm">No items found in this view.</p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                  <div className="space-y-4">
                     {filteredItems.map((item, index) => (
                       <motion.div
                         key={item.id}
@@ -878,7 +878,7 @@ export default function App() {
                         tabIndex={0}
                         aria-expanded={expandedIds.has(item.id)}
                         aria-label={`Wire item ${item.orderNumber} for ${item.customer}. Click to expand details.`}
-                        className={`relative group border-2 rounded-2xl p-5 transition-all hover:shadow-2xl cursor-pointer outline-none focus:ring-4 focus:ring-blue-200 flex flex-col h-full ${
+                        className={`relative group border-2 rounded-2xl p-4 transition-all hover:shadow-lg cursor-pointer outline-none focus:ring-4 focus:ring-blue-200 flex flex-col ${
                           draggedId === item.id ? 'opacity-50 scale-95' : ''
                         } ${
                           selectedIds.has(item.id) ? 'border-blue-500 ring-2 ring-blue-100' : 'border-gray-100 shadow-sm'
@@ -889,9 +889,9 @@ export default function App() {
                         }`}
                         style={{ backgroundColor: item.color }}
                       >
-                        {/* Item Header */}
-                        <div className="flex justify-between items-start mb-4">
-                          <div className="flex gap-3">
+                        {/* Item Header / Horizontal Main Info */}
+                        <div className="flex flex-wrap items-center justify-between gap-4">
+                          <div className="flex items-center gap-4 shrink-0">
                             <div
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -908,18 +908,19 @@ export default function App() {
                                   toggleSelect(item.id);
                                 }
                               }}
-                              className={`w-6 h-6 mt-1 rounded-lg flex items-center justify-center transition-all outline-none focus:ring-2 focus:ring-blue-400 shrink-0 ${
+                              className={`w-6 h-6 rounded-lg flex items-center justify-center transition-all outline-none focus:ring-2 focus:ring-blue-400 shrink-0 ${
                                 selectedIds.has(item.id) ? 'bg-blue-600 text-white' : 'bg-gray-100/80 text-gray-400 hover:bg-gray-200'
                               }`}
                             >
                               {selectedIds.has(item.id) ? <CheckSquare size={16} /> : <Square size={16} />}
                             </div>
 
-                            <div className="bg-white/80 backdrop-blur-sm text-blue-700 w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs shadow-sm border border-blue-100">
+                            <div className="bg-white/80 backdrop-blur-sm text-blue-700 w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs shadow-sm border border-blue-100 shrink-0">
                               {index + 1}
                             </div>
+
                             <div>
-                              <div className="text-base font-black text-gray-900 flex items-center gap-2 flex-wrap">
+                              <div className="text-base font-black text-gray-900 flex items-center gap-2">
                                 {item.orderNumber || 'N/A'} / {item.lineNumber || 'N/A'}
                                 {item.entryType && (
                                   <span className="bg-amber-100 text-amber-800 text-[9px] px-2 py-0.5 rounded-full border border-amber-200 font-black uppercase">
@@ -927,39 +928,72 @@ export default function App() {
                                   </span>
                                 )}
                               </div>
-                              <div className="text-[10px] font-bold text-gray-400 mt-1 uppercase tracking-wider flex items-center gap-1">
+                              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1">
                                 <Clock size={10} /> {new Date(item.createdAt).toLocaleDateString()} {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                               </div>
                             </div>
                           </div>
-                          <div className="text-right">
-                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-0.5">Customer</span>
-                            <div className="text-xs font-black text-gray-700 truncate max-w-[120px]">{item.customer || 'N/A'}</div>
-                          </div>
-                        </div>
 
-                        {/* Item Body */}
-                        <div className="bg-white/60 backdrop-blur-md p-4 rounded-xl border border-black/5 mb-4 flex-1">
-                          <div className="flex justify-between items-center mb-2">
-                            <span className="font-black text-blue-900 text-xs uppercase tracking-tight flex items-center gap-1.5">
-                              <FileText size={14} className="text-blue-600" /> {item.wireType || 'Wire Type: N/A'}
-                            </span>
-                            <span className="bg-blue-700 text-white text-[11px] font-black px-2.5 py-1 rounded-lg shadow-sm">
-                              {item.lengthZ || '0'} Z
-                            </span>
-                          </div>
-                          <p className="text-xs font-semibold text-gray-600 leading-relaxed mb-3">{item.wireDescription || 'No description provided.'}</p>
+                          <div className="flex flex-1 flex-wrap items-center justify-between gap-6 px-4 py-2 bg-white/40 backdrop-blur-sm rounded-xl border border-black/5">
+                            <div className="min-w-[150px]">
+                              <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-0.5">Customer</span>
+                              <div className="text-xs font-black text-gray-700 truncate">{item.customer || 'N/A'}</div>
+                            </div>
 
-                          <div className="flex items-center gap-2">
-                            <div className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md ${
-                              item.urgency === 'Urgent' ? 'bg-red-100 text-red-600' :
-                              item.urgency === 'High' ? 'bg-orange-100 text-orange-600' :
-                              'bg-blue-100 text-blue-600'
-                            }`}>
-                              {item.urgency} Priority
+                            <div className="min-w-[200px]">
+                              <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-0.5">Wire Type</span>
+                              <div className="text-xs font-black text-blue-900 flex items-center gap-1.5 uppercase">
+                                <FileText size={14} className="text-blue-600" /> {item.wireType || 'N/A'}
+                              </div>
+                            </div>
+
+                            <div className="text-center">
+                              <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-0.5">Length</span>
+                              <div className="bg-blue-700 text-white text-[11px] font-black px-3 py-1 rounded-lg shadow-sm">
+                                {item.lengthZ || '0'} Z
+                              </div>
+                            </div>
+
+                            <div className="text-right min-w-[100px]">
+                              <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-0.5">Priority</span>
+                              <div className={`text-[10px] font-black uppercase tracking-widest inline-block px-2 py-0.5 rounded-md ${
+                                item.urgency === 'Urgent' ? 'bg-red-100 text-red-600' :
+                                item.urgency === 'High' ? 'bg-orange-100 text-orange-600' :
+                                'bg-blue-100 text-blue-600'
+                              }`}>
+                                {item.urgency}
+                              </div>
                             </div>
                           </div>
+
+                          <div className="flex items-center gap-2 sm:ml-4">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openEditModal(item as WireItem);
+                              }}
+                              className="p-2 text-gray-400 hover:text-blue-600 hover:bg-white rounded-xl transition"
+                            >
+                              <Edit3 size={18} />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setContextMenu({ x: e.clientX, y: e.clientY, itemId: item.id });
+                              }}
+                              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-white rounded-xl transition"
+                            >
+                              <MoreVertical size={18} />
+                            </button>
+                          </div>
                         </div>
+
+                        {/* Item Description (Shown only if present) */}
+                        {item.wireDescription && (
+                          <p className="text-xs font-semibold text-gray-500 mt-3 px-1 border-l-2 border-gray-200 ml-14">
+                            {item.wireDescription}
+                          </p>
+                        )}
 
                         {/* Comments & Meta */}
                         <AnimatePresence>
