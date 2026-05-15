@@ -640,17 +640,50 @@ export default function App() {
 
   // --- Render ---
   return (
-    <div className="min-h-screen bg-gray-100 p-4 font-sans text-gray-900">
-      <div className="max-w-3xl mx-auto space-y-6">
+    <div className="min-h-screen bg-gray-50 font-sans text-gray-900">
+      {/* Global Header */}
+      <header className="bg-white border-b border-gray-200 px-6 py-4 flex flex-col sm:flex-row items-center justify-between sticky top-0 z-30 shadow-sm gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-blue-700 rounded-xl flex items-center justify-center text-white font-black text-xl shadow-lg">E</div>
+          <div>
+            <h1 className="text-xl font-black tracking-tighter bg-gradient-to-r from-blue-800 to-blue-600 bg-clip-text text-transparent uppercase leading-none">
+              EECOL – Wire Cut List
+            </h1>
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Order Management System</p>
+          </div>
+        </div>
         
-        {/* Header */}
-        <header className="text-center py-6">
-          <h1 className="text-3xl font-black tracking-tighter bg-gradient-to-r from-blue-800 to-blue-600 bg-clip-text text-transparent uppercase">
-            EECOL – Wire Cut List
-          </h1>
-          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">Order Management System</p>
-        </header>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => {
+              setEditingItem({ status: 'active', urgency: 'Normal', color: '#ffffff', entryType: 'IBT' });
+              setIsEditModalOpen(true);
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-yellow-600 text-white rounded-xl hover:bg-yellow-700 transition font-black text-xs shadow-md"
+          >
+            <Plus size={16} /> Add New Item
+          </button>
+          <div className="h-8 w-px bg-gray-200 mx-1 hidden sm:block" />
+          <button
+            onClick={() => setIsSettingsModalOpen(true)}
+            className="p-2 bg-white border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition shadow-sm"
+            title="Settings"
+            aria-label="Open settings"
+          >
+            <Settings size={18} />
+          </button>
+          <button
+            onClick={exportToCSV}
+            className="p-2 bg-white border border-gray-200 text-blue-600 rounded-xl hover:bg-gray-50 transition shadow-sm"
+            title="Export to CSV"
+            aria-label="Export to CSV"
+          >
+            <Download size={18} />
+          </button>
+        </div>
+      </header>
 
+      <div className="w-full max-w-[1800px] mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
         {/* Main List Container */}
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-200">
           {/* List Header / Controls */}
@@ -665,36 +698,11 @@ export default function App() {
               </button>
               <div className="flex gap-2">
                 <button 
-                  onClick={() => {
-                    setEditingItem({ status: 'active', urgency: 'Normal', color: '#ffffff', entryType: 'IBT' });
-                    setIsEditModalOpen(true);
-                  }}
-                  className="flex items-center gap-1 px-3 py-1.5 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition font-bold text-xs shadow-sm"
-                >
-                  <Plus size={14} /> Add Item
-                </button>
-                <button 
-                  onClick={() => setIsSettingsModalOpen(true)}
-                  title="Settings"
-                  aria-label="Open settings"
-                  className="p-1.5 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition shadow-sm"
-                >
-                  <Settings size={14} />
-                </button>
-                <button 
                   onClick={() => addToast('List refreshed', 'info')}
                   aria-label="Refresh list"
                   className="p-1.5 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition shadow-sm"
                 >
                   <RefreshCw size={14} />
-                </button>
-                <button 
-                  onClick={exportToCSV}
-                  title="Export to CSV"
-                  aria-label="Export to CSV"
-                  className="p-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition shadow-sm"
-                >
-                  <Download size={14} />
                 </button>
               </div>
             </div>
@@ -827,10 +835,10 @@ export default function App() {
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: 'auto', opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
-                className="p-4 space-y-4 min-h-[100px]"
+                className="p-4 min-h-[100px]"
               >
                 {filteredItems.length > 0 && (
-                  <div className="flex items-center gap-2 mb-2 px-2">
+                  <div className="flex items-center gap-2 mb-4 px-2">
                     <button 
                       onClick={toggleSelectAll}
                       className="flex items-center gap-2 text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-gray-600 transition"
@@ -846,234 +854,229 @@ export default function App() {
                     <p className="text-gray-400 italic text-sm">No items found in this view.</p>
                   </div>
                 ) : (
-                  filteredItems.map((item, index) => (
-                    <motion.div
-                      key={item.id}
-                      layout
-                      draggable
-                      onDragStart={() => onDragStart(item.id)}
-                      onDragOver={(e) => onDragOver(e, item.id)}
-                      onDragEnd={onDragEnd}
-                      onContextMenu={(e) => {
-                        e.preventDefault();
-                        setContextMenu({ x: e.clientX, y: e.clientY, itemId: item.id });
-                      }}
-                      onClick={() => toggleExpand(item.id)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                    {filteredItems.map((item, index) => (
+                      <motion.div
+                        key={item.id}
+                        layout
+                        draggable
+                        onDragStart={() => onDragStart(item.id)}
+                        onDragOver={(e) => onDragOver(e, item.id)}
+                        onDragEnd={onDragEnd}
+                        onContextMenu={(e) => {
                           e.preventDefault();
-                          toggleExpand(item.id);
-                        }
-                      }}
-                      role="button"
-                      tabIndex={0}
-                      aria-expanded={expandedIds.has(item.id)}
-                      aria-label={`Wire item ${item.orderNumber} for ${item.customer}. Click to expand details.`}
-                      className={`relative group border-2 rounded-2xl p-4 transition-all hover:shadow-lg cursor-pointer outline-none focus:ring-4 focus:ring-blue-200 ${
-                        draggedId === item.id ? 'opacity-50 scale-95' : ''
-                      } ${
-                        selectedIds.has(item.id) ? 'border-blue-500 ring-2 ring-blue-100' : 'border-gray-100'
-                      } ${
-                        item.urgency === 'Urgent' ? 'border-l-8 border-l-red-600 shadow-[0_0_15px_rgba(220,38,38,0.1)]' : 
-                        item.urgency === 'High' ? 'border-l-8 border-l-orange-500' : 
-                        'border-l-8 border-l-blue-400'
-                      }`}
-                      style={{ backgroundColor: item.color }}
-                    >
-                      {/* Item Header */}
-                      <div className="flex justify-between items-start mb-3">
-                        <div className="flex gap-3">
-                          {/* Selection Checkbox moved next to index */}
-                          <div
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleSelect(item.id);
-                            }}
-                            role="checkbox"
-                            aria-checked={selectedIds.has(item.id)}
-                            aria-label="Select item"
-                            tabIndex={0}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' || e.key === ' ') {
-                                e.preventDefault();
+                          setContextMenu({ x: e.clientX, y: e.clientY, itemId: item.id });
+                        }}
+                        onClick={() => toggleExpand(item.id)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            toggleExpand(item.id);
+                          }
+                        }}
+                        role="button"
+                        tabIndex={0}
+                        aria-expanded={expandedIds.has(item.id)}
+                        aria-label={`Wire item ${item.orderNumber} for ${item.customer}. Click to expand details.`}
+                        className={`relative group border-2 rounded-2xl p-5 transition-all hover:shadow-2xl cursor-pointer outline-none focus:ring-4 focus:ring-blue-200 flex flex-col h-full ${
+                          draggedId === item.id ? 'opacity-50 scale-95' : ''
+                        } ${
+                          selectedIds.has(item.id) ? 'border-blue-500 ring-2 ring-blue-100' : 'border-gray-100 shadow-sm'
+                        } ${
+                          item.urgency === 'Urgent' ? 'border-l-8 border-l-red-600' :
+                          item.urgency === 'High' ? 'border-l-8 border-l-orange-500' :
+                          'border-l-8 border-l-blue-400'
+                        }`}
+                        style={{ backgroundColor: item.color }}
+                      >
+                        {/* Item Header */}
+                        <div className="flex justify-between items-start mb-4">
+                          <div className="flex gap-3">
+                            <div
+                              onClick={(e) => {
                                 e.stopPropagation();
                                 toggleSelect(item.id);
-                              }
-                            }}
-                            className={`w-6 h-6 mt-1 rounded-lg flex items-center justify-center transition-all outline-none focus:ring-2 focus:ring-blue-400 shrink-0 ${
-                              selectedIds.has(item.id) ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-300 hover:bg-gray-200'
-                            }`}
-                          >
-                            {selectedIds.has(item.id) ? <CheckSquare size={16} /> : <Square size={16} />}
-                          </div>
-
-                          <div className="bg-blue-50 text-blue-700 w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs shadow-inner">
-                            {index + 1}
-                          </div>
-                          <div>
-                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
-                              <Hash size={10} /> Order / Line
-                            </span>
-                            <div className="text-sm font-black text-gray-800 flex items-center gap-2">
-                              {item.orderNumber || 'N/A'} / {item.lineNumber || 'N/A'}
-                              {item.entryType && (
-                                <span className="bg-amber-100 text-amber-800 text-[9px] px-2 py-0.5 rounded-full border border-amber-200 font-black">
-                                  {item.entryType}
-                                </span>
-                              )}
-                            </div>
-                            <div className="text-[10px] font-bold text-gray-500 mt-0.5">
-                              {new Date(item.createdAt).toLocaleDateString()} {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center justify-end gap-1">
-                            <User size={10} /> Customer
-                          </span>
-                          <div className="text-xs font-bold text-gray-700">{item.customer || 'N/A'}</div>
-                        </div>
-                      </div>
-
-                      {/* Item Body */}
-                      <div className="bg-white/40 backdrop-blur-sm p-3 rounded-xl border border-black/5 mb-3">
-                        <div className="flex justify-between items-center mb-1">
-                          <span className="font-black text-blue-800 text-[11px] uppercase tracking-tighter flex items-center gap-1">
-                            <FileText size={12} /> {item.wireType || 'Wire Type: N/A'}
-                          </span>
-                          <span className="bg-blue-600 text-white text-[10px] font-black px-2 py-0.5 rounded-lg shadow-sm">
-                            {item.lengthZ || '0'} Z
-                          </span>
-                        </div>
-                        <p className="text-xs font-medium text-gray-600 leading-relaxed">{item.wireDescription || 'No description provided.'}</p>
-                        
-                        <div className="mt-2 flex items-center gap-2">
-                          <Clock size={10} className={item.urgency === 'Urgent' ? 'text-red-500' : 'text-gray-400'} />
-                          <span className={`text-[10px] font-black uppercase tracking-wider ${
-                            item.urgency === 'Urgent' ? 'text-red-600' : 
-                            item.urgency === 'High' ? 'text-orange-600' : 
-                            'text-gray-400'
-                          }`}>
-                            {item.urgency} Urgency
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Comments & Meta */}
-                      <AnimatePresence>
-                        {expandedIds.has(item.id) && (
-                          <motion.div 
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: 'auto', opacity: 1 }}
-                            exit={{ height: 0, opacity: 0 }}
-                            className="overflow-hidden"
-                          >
-                            <div className="flex flex-wrap gap-2 mb-4 pt-2 border-t border-black/5 mt-2">
-                              {item.orderComments ? (
-                                <div className="w-full bg-rose-50 text-rose-600 text-[10px] font-bold px-3 py-2 rounded-lg border border-rose-100 flex items-start gap-2">
-                                  <AlertCircle size={12} className="mt-0.5 shrink-0" /> 
-                                  <div>
-                                    <span className="uppercase block text-[8px] opacity-70">Order Comments</span>
-                                    {item.orderComments}
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="w-full text-[9px] text-gray-400 italic px-3">No order comments.</div>
-                              )}
-                              
-                              {item.shipperComments ? (
-                                <div className="w-full bg-blue-50 text-blue-600 text-[10px] font-bold px-3 py-2 rounded-lg border border-blue-100 flex items-start gap-2">
-                                  <RefreshCw size={12} className="mt-0.5 shrink-0" /> 
-                                  <div>
-                                    <span className="uppercase block text-[8px] opacity-70">Shipper Comments</span>
-                                    {item.shipperComments}
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="w-full text-[9px] text-gray-400 italic px-3">No shipper comments.</div>
-                              )}
-
-                              {item.status === 'archived' && item.removalReason && (
-                                <div className="w-full bg-gray-100 text-gray-600 text-[10px] font-bold px-3 py-2 rounded-lg border border-gray-200 flex items-start gap-2">
-                                  <Archive size={12} className="mt-0.5 shrink-0" />
-                                  <div>
-                                    <span className="uppercase block text-[8px] opacity-70">Removal Reason</span>
-                                    {item.removalReason}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-
-                      {!expandedIds.has(item.id) && (
-                        <div className="flex flex-wrap gap-2 mb-4 opacity-60">
-                          {item.orderComments && (
-                            <div className="bg-rose-50 text-rose-600 text-[9px] font-bold px-2 py-0.5 rounded border border-rose-100 truncate max-w-[150px]">
-                              💬 {item.orderComments}
-                            </div>
-                          )}
-                          {item.shipperComments && (
-                            <div className="bg-blue-50 text-blue-600 text-[9px] font-bold px-2 py-0.5 rounded border border-blue-100 truncate max-w-[150px]">
-                              🚚 {item.shipperComments}
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Footer Actions */}
-                      <div className="flex justify-between items-center pt-3 border-t border-black/5">
-                        <div className="flex items-center gap-2">
-                          <button 
-                            onClick={() => openEditModal(item as WireItem)}
-                            aria-label="Edit item"
-                            className="p-1.5 text-gray-400 hover:text-blue-600 transition"
-                          >
-                            <Edit3 size={14} />
-                          </button>
-                          <button 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setContextMenu({ x: e.clientX, y: e.clientY, itemId: item.id });
-                            }}
-                            aria-label="More options"
-                            className="p-1.5 text-gray-400 hover:text-gray-600 transition"
-                          >
-                            <MoreVertical size={14} />
-                          </button>
-                        </div>
-                        <div className="flex gap-2">
-                          {item.status === 'active' ? (
-                            <>
-                              <button 
-                                onClick={() => handleComplete(item.id)}
-                                className="flex items-center gap-1.5 px-4 py-1.5 bg-emerald-600 text-white rounded-xl text-[10px] font-black hover:bg-emerald-700 transition shadow-sm uppercase tracking-tight"
-                              >
-                                <CheckCircle2 size={12} /> Complete
-                              </button>
-                              <button 
-                                onClick={() => {
-                                  setArchivingId(item.id);
-                                  setIsArchiveModalOpen(true);
-                                }}
-                                className="flex items-center gap-1.5 px-4 py-1.5 bg-rose-600 text-white rounded-xl text-[10px] font-black hover:bg-rose-700 transition shadow-sm uppercase tracking-tight"
-                              >
-                                <Trash2 size={12} /> Remove
-                              </button>
-                            </>
-                          ) : (
-                            <button 
-                              onClick={() => handleRestore(item.id)}
-                              className="flex items-center gap-1.5 px-4 py-1.5 bg-gray-600 text-white rounded-xl text-[10px] font-black hover:bg-gray-700 transition shadow-sm uppercase tracking-tight"
+                              }}
+                              role="checkbox"
+                              aria-checked={selectedIds.has(item.id)}
+                              aria-label="Select item"
+                              tabIndex={0}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  toggleSelect(item.id);
+                                }
+                              }}
+                              className={`w-6 h-6 mt-1 rounded-lg flex items-center justify-center transition-all outline-none focus:ring-2 focus:ring-blue-400 shrink-0 ${
+                                selectedIds.has(item.id) ? 'bg-blue-600 text-white' : 'bg-gray-100/80 text-gray-400 hover:bg-gray-200'
+                              }`}
                             >
-                              <RefreshCw size={12} /> Restore
-                            </button>
-                          )}
+                              {selectedIds.has(item.id) ? <CheckSquare size={16} /> : <Square size={16} />}
+                            </div>
+
+                            <div className="bg-white/80 backdrop-blur-sm text-blue-700 w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs shadow-sm border border-blue-100">
+                              {index + 1}
+                            </div>
+                            <div>
+                              <div className="text-base font-black text-gray-900 flex items-center gap-2 flex-wrap">
+                                {item.orderNumber || 'N/A'} / {item.lineNumber || 'N/A'}
+                                {item.entryType && (
+                                  <span className="bg-amber-100 text-amber-800 text-[9px] px-2 py-0.5 rounded-full border border-amber-200 font-black uppercase">
+                                    {item.entryType}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[10px] font-bold text-gray-400 mt-1 uppercase tracking-wider flex items-center gap-1">
+                                <Clock size={10} /> {new Date(item.createdAt).toLocaleDateString()} {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-0.5">Customer</span>
+                            <div className="text-xs font-black text-gray-700 truncate max-w-[120px]">{item.customer || 'N/A'}</div>
+                          </div>
                         </div>
-                      </div>
-                    </motion.div>
-                  ))
+
+                        {/* Item Body */}
+                        <div className="bg-white/60 backdrop-blur-md p-4 rounded-xl border border-black/5 mb-4 flex-1">
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="font-black text-blue-900 text-xs uppercase tracking-tight flex items-center gap-1.5">
+                              <FileText size={14} className="text-blue-600" /> {item.wireType || 'Wire Type: N/A'}
+                            </span>
+                            <span className="bg-blue-700 text-white text-[11px] font-black px-2.5 py-1 rounded-lg shadow-sm">
+                              {item.lengthZ || '0'} Z
+                            </span>
+                          </div>
+                          <p className="text-xs font-semibold text-gray-600 leading-relaxed mb-3">{item.wireDescription || 'No description provided.'}</p>
+
+                          <div className="flex items-center gap-2">
+                            <div className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md ${
+                              item.urgency === 'Urgent' ? 'bg-red-100 text-red-600' :
+                              item.urgency === 'High' ? 'bg-orange-100 text-orange-600' :
+                              'bg-blue-100 text-blue-600'
+                            }`}>
+                              {item.urgency} Priority
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Comments & Meta */}
+                        <AnimatePresence>
+                          {expandedIds.has(item.id) && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: 'auto', opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              className="overflow-hidden"
+                            >
+                              <div className="flex flex-wrap gap-2 mb-4 pt-2 border-t border-black/5 mt-2">
+                                {item.orderComments ? (
+                                  <div className="w-full bg-rose-50 text-rose-600 text-[10px] font-bold px-3 py-2 rounded-lg border border-rose-100 flex items-start gap-2">
+                                    <AlertCircle size={12} className="mt-0.5 shrink-0" />
+                                    <div>
+                                      <span className="uppercase block text-[8px] opacity-70">Order Comments</span>
+                                      {item.orderComments}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="w-full text-[9px] text-gray-400 italic px-3">No order comments.</div>
+                                )}
+
+                                {item.shipperComments ? (
+                                  <div className="w-full bg-blue-50 text-blue-600 text-[10px] font-bold px-3 py-2 rounded-lg border border-blue-100 flex items-start gap-2">
+                                    <RefreshCw size={12} className="mt-0.5 shrink-0" />
+                                    <div>
+                                      <span className="uppercase block text-[8px] opacity-70">Shipper Comments</span>
+                                      {item.shipperComments}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="w-full text-[9px] text-gray-400 italic px-3">No shipper comments.</div>
+                                )}
+
+                                {item.status === 'archived' && item.removalReason && (
+                                  <div className="w-full bg-gray-100 text-gray-600 text-[10px] font-bold px-3 py-2 rounded-lg border border-gray-200 flex items-start gap-2">
+                                    <Archive size={12} className="mt-0.5 shrink-0" />
+                                    <div>
+                                      <span className="uppercase block text-[8px] opacity-70">Removal Reason</span>
+                                      {item.removalReason}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+
+                        {!expandedIds.has(item.id) && (
+                          <div className="flex flex-wrap gap-2 mb-4 opacity-60">
+                            {item.orderComments && (
+                              <div className="bg-rose-50 text-rose-600 text-[9px] font-bold px-2 py-0.5 rounded border border-rose-100 truncate max-w-[150px]">
+                                💬 {item.orderComments}
+                              </div>
+                            )}
+                            {item.shipperComments && (
+                              <div className="bg-blue-50 text-blue-600 text-[9px] font-bold px-2 py-0.5 rounded border border-blue-100 truncate max-w-[150px]">
+                                🚚 {item.shipperComments}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Footer Actions */}
+                        <div className="flex justify-between items-center pt-3 border-t border-black/5">
+                          <div className="flex items-center gap-2">
+                            <button 
+                              onClick={() => openEditModal(item as WireItem)}
+                              aria-label="Edit item"
+                              className="p-1.5 text-gray-400 hover:text-blue-600 transition"
+                            >
+                              <Edit3 size={14} />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setContextMenu({ x: e.clientX, y: e.clientY, itemId: item.id });
+                              }}
+                              aria-label="More options"
+                              className="p-1.5 text-gray-400 hover:text-gray-600 transition"
+                            >
+                              <MoreVertical size={14} />
+                            </button>
+                          </div>
+                          <div className="flex gap-2">
+                            {item.status === 'active' ? (
+                              <>
+                                <button
+                                  onClick={() => handleComplete(item.id)}
+                                  className="flex items-center gap-1.5 px-4 py-1.5 bg-emerald-600 text-white rounded-xl text-[10px] font-black hover:bg-emerald-700 transition shadow-sm uppercase tracking-tight"
+                                >
+                                  <CheckCircle2 size={12} /> Complete
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setArchivingId(item.id);
+                                    setIsArchiveModalOpen(true);
+                                  }}
+                                  className="flex items-center gap-1.5 px-4 py-1.5 bg-rose-600 text-white rounded-xl text-[10px] font-black hover:bg-rose-700 transition shadow-sm uppercase tracking-tight"
+                                >
+                                  <Trash2 size={12} /> Remove
+                                </button>
+                              </>
+                            ) : (
+                              <button
+                                onClick={() => handleRestore(item.id)}
+                                className="flex items-center gap-1.5 px-4 py-1.5 bg-gray-600 text-white rounded-xl text-[10px] font-black hover:bg-gray-700 transition shadow-sm uppercase tracking-tight"
+                              >
+                                <RefreshCw size={12} /> Restore
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
                 )}
               </motion.div>
             )}
