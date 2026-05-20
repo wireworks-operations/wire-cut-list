@@ -641,150 +641,118 @@ export default function App() {
   // --- Render ---
   return (
     <div className="min-h-screen bg-gray-50 font-sans text-gray-900">
-      {/* Global Header */}
-      <header className="bg-white border-b border-gray-200 px-6 py-4 flex flex-col sm:flex-row items-center justify-between sticky top-0 z-30 shadow-sm gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-blue-700 rounded-xl flex items-center justify-center text-white font-black text-xl shadow-lg">E</div>
-          <div>
-            <h1 className="text-xl font-black tracking-tighter bg-gradient-to-r from-blue-800 to-blue-600 bg-clip-text text-transparent uppercase leading-none">
-              EECOL – Wire Cut List
-            </h1>
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Order Management System</p>
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => {
-              setEditingItem({ status: 'active', urgency: 'Normal', color: '#ffffff', entryType: 'IBT' });
-              setIsEditModalOpen(true);
-            }}
-            className="flex items-center gap-2 px-4 py-2 bg-yellow-600 text-white rounded-xl hover:bg-yellow-700 transition font-black text-xs shadow-md"
-          >
-            <Plus size={16} /> Add New Item
-          </button>
-          <div className="h-8 w-px bg-gray-200 mx-1 hidden sm:block" />
-          <button
-            onClick={() => setIsSettingsModalOpen(true)}
-            className="p-2 bg-white border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition shadow-sm"
-            title="Settings"
-            aria-label="Open settings"
-          >
-            <Settings size={18} />
-          </button>
-          <button
-            onClick={exportToCSV}
-            className="p-2 bg-white border border-gray-200 text-blue-600 rounded-xl hover:bg-gray-50 transition shadow-sm"
-            title="Export to CSV"
-            aria-label="Export to CSV"
-          >
-            <Download size={18} />
-          </button>
-        </div>
-      </header>
-
       <div className="w-full max-w-[1800px] mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
-        {/* Main List Container */}
-        <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-200">
-          {/* List Header / Controls */}
-          <div className="p-4 bg-gradient-to-r from-yellow-50 to-amber-50 border-b border-yellow-100">
-            <div className="flex items-center justify-between mb-4">
-              <button 
-                onClick={() => setIsListExpanded(!isListExpanded)}
-                className="flex items-center gap-2 font-black text-yellow-800 uppercase text-sm tracking-tight"
+        
+        {/* Main Dashboard Controls */}
+        <div className="flex flex-col lg:flex-row items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => {
+                setEditingItem({ status: 'active', urgency: 'Normal', color: '#ffffff', entryType: 'IBT' });
+                setIsEditModalOpen(true);
+              }}
+              className="flex items-center gap-2 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition font-black text-sm shadow-sm"
+            >
+              <Plus size={18} /> Add Item
+            </button>
+            <button
+              onClick={() => addToast('List refreshed', 'info')}
+              className="flex items-center gap-2 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition font-black text-sm shadow-sm"
+            >
+              <RefreshCw size={18} /> Refresh
+            </button>
+            <button
+              onClick={exportToCSV}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-black text-sm shadow-sm"
+            >
+              <Download size={18} /> Export CSV
+            </button>
+            <button
+              onClick={() => setIsListExpanded(!isListExpanded)}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition font-black text-sm shadow-sm"
+            >
+              {isListExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+              {isListExpanded ? 'Collapse' : 'Expand'}
+            </button>
+            <button
+              onClick={() => setIsSettingsModalOpen(true)}
+              className="p-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition shadow-sm"
+              title="Settings"
+            >
+              <Settings size={18} />
+            </button>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-gray-500 text-[10px] uppercase tracking-widest">Search</span>
+              <input
+                type="text"
+                placeholder="Search list..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-yellow-500 outline-none transition w-48"
+              />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-gray-500 text-[10px] uppercase tracking-widest">Status</span>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as Status | 'all')}
+                className="bg-white border border-gray-200 rounded-lg px-3 py-2 text-xs font-bold text-gray-700 outline-none focus:ring-2 focus:ring-yellow-500"
               >
-                {isListExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-                🗂️ Wire Cut List
-              </button>
-              <div className="flex gap-2">
-                <button 
-                  onClick={() => addToast('List refreshed', 'info')}
-                  aria-label="Refresh list"
-                  className="p-1.5 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition shadow-sm"
+                <option value="active">Active</option>
+                <option value="completed">Completed</option>
+                <option value="archived">Archived</option>
+                <option value="all">All</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-gray-500 text-[10px] uppercase tracking-widest">Type</span>
+              <select
+                value={entryTypeFilter}
+                onChange={(e) => setEntryTypeFilter(e.target.value as EntryType | 'all')}
+                className="bg-white border border-gray-200 rounded-lg px-3 py-2 text-xs font-bold text-gray-700 outline-none focus:ring-2 focus:ring-yellow-500"
+              >
+                <option value="all">All Types</option>
+                <option value="IBT">IBT</option>
+                <option value="CITY CALL">CITY CALL</option>
+                <option value="CUSTOMER ORDER">CUSTOMER ORDER</option>
+                <option value="SHIPPING">SHIPPING</option>
+                <option value="EECOL VAN">EECOL VAN</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-gray-500 text-[10px] uppercase tracking-widest">Sort</span>
+              <div className="flex items-center bg-white border border-gray-200 rounded-lg overflow-hidden">
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as keyof WireItem)}
+                  className="px-3 py-2 text-xs font-bold text-gray-700 outline-none"
                 >
-                  <RefreshCw size={14} />
+                  <option value="position">Custom Order</option>
+                  <option value="orderNumber">Order #</option>
+                  <option value="customer">Customer</option>
+                  <option value="wireType">Wire Type</option>
+                  <option value="urgency">Urgency</option>
+                  <option value="createdAt">Date Created</option>
+                </select>
+                <button
+                  onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                  className="px-2 py-2 hover:bg-gray-50 border-l border-gray-200 text-gray-500 transition"
+                >
+                  <ArrowUpDown size={14} />
                 </button>
               </div>
             </div>
-
-            <div className="flex flex-col gap-3">
-              <div className="flex flex-col sm:flex-row gap-3">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-yellow-400" size={14} />
-                  <input 
-                    type="text" 
-                    placeholder="Fuzzy search (Order, Customer, Wire Type...)"
-                    aria-label="Search wire items"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2 bg-white border border-yellow-200 rounded-xl text-xs focus:ring-2 focus:ring-yellow-500 outline-none transition"
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <label htmlFor="status-filter" className="text-[10px] font-black text-yellow-700 uppercase flex items-center gap-1">
-                    <Filter size={10} /> Status:
-                  </label>
-                  <select 
-                    id="status-filter"
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value as Status | 'all')}
-                    className="bg-white border border-yellow-200 rounded-xl px-3 py-2 text-xs font-bold text-yellow-800 outline-none focus:ring-2 focus:ring-yellow-500"
-                  >
-                    <option value="active">Active</option>
-                    <option value="completed">Completed</option>
-                    <option value="archived">Archived</option>
-                    <option value="all">All Status</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="flex items-center gap-2">
-                  <label htmlFor="type-filter" className="text-[10px] font-black text-yellow-700 uppercase flex items-center gap-1">
-                    <Filter size={10} /> Type:
-                  </label>
-                  <select 
-                    id="type-filter"
-                    value={entryTypeFilter}
-                    onChange={(e) => setEntryTypeFilter(e.target.value as EntryType | 'all')}
-                    className="bg-white border border-yellow-200 rounded-xl px-3 py-2 text-xs font-bold text-yellow-800 outline-none focus:ring-2 focus:ring-yellow-500"
-                  >
-                    <option value="all">All Types</option>
-                    <option value="IBT">IBT</option>
-                    <option value="CITY CALL">CITY CALL</option>
-                    <option value="CUSTOMER ORDER">CUSTOMER ORDER</option>
-                    <option value="SHIPPING">SHIPPING</option>
-                    <option value="EECOL VAN">EECOL VAN</option>
-                  </select>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <label htmlFor="sort-by" className="text-[10px] font-black text-yellow-700 uppercase flex items-center gap-1">
-                    <ArrowUpDown size={10} /> Sort:
-                  </label>
-                  <select 
-                    id="sort-by"
-                    value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value as keyof WireItem)}
-                    className="bg-white border border-yellow-200 rounded-xl px-3 py-2 text-xs font-bold text-yellow-800 outline-none focus:ring-2 focus:ring-yellow-500"
-                  >
-                    <option value="position">Manual Order</option>
-                    <option value="orderNumber">Order #</option>
-                    <option value="customer">Customer</option>
-                    <option value="urgency">Urgency</option>
-                    <option value="createdAt">Date Created</option>
-                  </select>
-                  <button 
-                    onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
-                    aria-label={`Sort ${sortOrder === 'asc' ? 'descending' : 'ascending'}`}
-                    className="p-2 bg-white border border-yellow-200 rounded-xl text-yellow-800 hover:bg-yellow-50 transition"
-                  >
-                    {sortOrder === 'asc' ? '↑' : '↓'}
-                  </button>
-                </div>
-              </div>
-            </div>
           </div>
+        </div>
+
+        {/* Main List Container */}
+        <div className="space-y-4">
 
           {/* Bulk Action Bar */}
           <AnimatePresence>
@@ -854,8 +822,8 @@ export default function App() {
                     <p className="text-gray-400 italic text-sm">No items found in this view.</p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                    {filteredItems.map((item, index) => (
+                  <div className="space-y-4">
+                    {filteredItems.map((item) => (
                       <motion.div
                         key={item.id}
                         layout
@@ -877,202 +845,114 @@ export default function App() {
                         role="button"
                         tabIndex={0}
                         aria-expanded={expandedIds.has(item.id)}
-                        aria-label={`Wire item ${item.orderNumber} for ${item.customer}. Click to expand details.`}
-                        className={`relative group border-2 rounded-2xl p-5 transition-all hover:shadow-2xl cursor-pointer outline-none focus:ring-4 focus:ring-blue-200 flex flex-col h-full ${
-                          draggedId === item.id ? 'opacity-50 scale-95' : ''
-                        } ${
-                          selectedIds.has(item.id) ? 'border-blue-500 ring-2 ring-blue-100' : 'border-gray-100 shadow-sm'
-                        } ${
-                          item.urgency === 'Urgent' ? 'border-l-8 border-l-red-600' :
-                          item.urgency === 'High' ? 'border-l-8 border-l-orange-500' :
-                          'border-l-8 border-l-blue-400'
+                        className={`relative group border border-yellow-300 rounded-xl overflow-hidden transition-all hover:shadow-md cursor-pointer outline-none focus:ring-2 focus:ring-yellow-400 flex flex-col ${
+                          draggedId === item.id ? 'opacity-50' : ''
                         }`}
-                        style={{ backgroundColor: item.color }}
+                        style={{ backgroundColor: item.color === '#ffffff' ? '#fff9c4' : item.color }}
                       >
-                        {/* Item Header */}
-                        <div className="flex justify-between items-start mb-4">
-                          <div className="flex gap-3">
-                            <div
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleSelect(item.id);
-                              }}
-                              role="checkbox"
-                              aria-checked={selectedIds.has(item.id)}
-                              aria-label="Select item"
-                              tabIndex={0}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter' || e.key === ' ') {
-                                  e.preventDefault();
+                        {/* Section Headers */}
+                        <div className="grid grid-cols-12 gap-0 border-b border-yellow-200/50">
+                          <div className="col-span-4 p-2 pl-4">
+                            <span className="text-[10px] font-black text-yellow-800/60 uppercase tracking-tighter">ORDER / LINE CUSTOMER</span>
+                          </div>
+                          <div className="col-span-4 p-2 border-l border-yellow-200/50">
+                            <span className="text-[10px] font-black text-yellow-800/60 uppercase tracking-tighter">ORDER COMMENTS</span>
+                          </div>
+                          <div className="col-span-4 p-2 border-l border-yellow-200/50 text-right pr-4">
+                            <span className="text-[10px] font-black text-yellow-800/60 uppercase tracking-tighter">SHIPPER COMMENTS</span>
+                          </div>
+                        </div>
+
+                        {/* Main Row Content */}
+                        <div className="grid grid-cols-12 min-h-[100px]">
+                          {/* Column 1: Order / Customer Info */}
+                          <div className="col-span-4 p-4 flex flex-col justify-between">
+                            <div className="flex items-start gap-3">
+                              <div
+                                onClick={(e) => {
                                   e.stopPropagation();
                                   toggleSelect(item.id);
-                                }
-                              }}
-                              className={`w-6 h-6 mt-1 rounded-lg flex items-center justify-center transition-all outline-none focus:ring-2 focus:ring-blue-400 shrink-0 ${
-                                selectedIds.has(item.id) ? 'bg-blue-600 text-white' : 'bg-gray-100/80 text-gray-400 hover:bg-gray-200'
-                              }`}
-                            >
-                              {selectedIds.has(item.id) ? <CheckSquare size={16} /> : <Square size={16} />}
-                            </div>
-
-                            <div className="bg-white/80 backdrop-blur-sm text-blue-700 w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs shadow-sm border border-blue-100">
-                              {index + 1}
-                            </div>
-                            <div>
-                              <div className="text-base font-black text-gray-900 flex items-center gap-2 flex-wrap">
-                                {item.orderNumber || 'N/A'} / {item.lineNumber || 'N/A'}
-                                {item.entryType && (
-                                  <span className="bg-amber-100 text-amber-800 text-[9px] px-2 py-0.5 rounded-full border border-amber-200 font-black uppercase">
-                                    {item.entryType}
-                                  </span>
-                                )}
-                              </div>
-                              <div className="text-[10px] font-bold text-gray-400 mt-1 uppercase tracking-wider flex items-center gap-1">
-                                <Clock size={10} /> {new Date(item.createdAt).toLocaleDateString()} {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-0.5">Customer</span>
-                            <div className="text-xs font-black text-gray-700 truncate max-w-[120px]">{item.customer || 'N/A'}</div>
-                          </div>
-                        </div>
-
-                        {/* Item Body */}
-                        <div className="bg-white/60 backdrop-blur-md p-4 rounded-xl border border-black/5 mb-4 flex-1">
-                          <div className="flex justify-between items-center mb-2">
-                            <span className="font-black text-blue-900 text-xs uppercase tracking-tight flex items-center gap-1.5">
-                              <FileText size={14} className="text-blue-600" /> {item.wireType || 'Wire Type: N/A'}
-                            </span>
-                            <span className="bg-blue-700 text-white text-[11px] font-black px-2.5 py-1 rounded-lg shadow-sm">
-                              {item.lengthZ || '0'} Z
-                            </span>
-                          </div>
-                          <p className="text-xs font-semibold text-gray-600 leading-relaxed mb-3">{item.wireDescription || 'No description provided.'}</p>
-
-                          <div className="flex items-center gap-2">
-                            <div className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md ${
-                              item.urgency === 'Urgent' ? 'bg-red-100 text-red-600' :
-                              item.urgency === 'High' ? 'bg-orange-100 text-orange-600' :
-                              'bg-blue-100 text-blue-600'
-                            }`}>
-                              {item.urgency} Priority
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Comments & Meta */}
-                        <AnimatePresence>
-                          {expandedIds.has(item.id) && (
-                            <motion.div
-                              initial={{ height: 0, opacity: 0 }}
-                              animate={{ height: 'auto', opacity: 1 }}
-                              exit={{ height: 0, opacity: 0 }}
-                              className="overflow-hidden"
-                            >
-                              <div className="flex flex-wrap gap-2 mb-4 pt-2 border-t border-black/5 mt-2">
-                                {item.orderComments ? (
-                                  <div className="w-full bg-rose-50 text-rose-600 text-[10px] font-bold px-3 py-2 rounded-lg border border-rose-100 flex items-start gap-2">
-                                    <AlertCircle size={12} className="mt-0.5 shrink-0" />
-                                    <div>
-                                      <span className="uppercase block text-[8px] opacity-70">Order Comments</span>
-                                      {item.orderComments}
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <div className="w-full text-[9px] text-gray-400 italic px-3">No order comments.</div>
-                                )}
-
-                                {item.shipperComments ? (
-                                  <div className="w-full bg-blue-50 text-blue-600 text-[10px] font-bold px-3 py-2 rounded-lg border border-blue-100 flex items-start gap-2">
-                                    <RefreshCw size={12} className="mt-0.5 shrink-0" />
-                                    <div>
-                                      <span className="uppercase block text-[8px] opacity-70">Shipper Comments</span>
-                                      {item.shipperComments}
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <div className="w-full text-[9px] text-gray-400 italic px-3">No shipper comments.</div>
-                                )}
-
-                                {item.status === 'archived' && item.removalReason && (
-                                  <div className="w-full bg-gray-100 text-gray-600 text-[10px] font-bold px-3 py-2 rounded-lg border border-gray-200 flex items-start gap-2">
-                                    <Archive size={12} className="mt-0.5 shrink-0" />
-                                    <div>
-                                      <span className="uppercase block text-[8px] opacity-70">Removal Reason</span>
-                                      {item.removalReason}
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-
-                        {!expandedIds.has(item.id) && (
-                          <div className="flex flex-wrap gap-2 mb-4 opacity-60">
-                            {item.orderComments && (
-                              <div className="bg-rose-50 text-rose-600 text-[9px] font-bold px-2 py-0.5 rounded border border-rose-100 truncate max-w-[150px]">
-                                💬 {item.orderComments}
-                              </div>
-                            )}
-                            {item.shipperComments && (
-                              <div className="bg-blue-50 text-blue-600 text-[9px] font-bold px-2 py-0.5 rounded border border-blue-100 truncate max-w-[150px]">
-                                🚚 {item.shipperComments}
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {/* Footer Actions */}
-                        <div className="flex justify-between items-center pt-3 border-t border-black/5">
-                          <div className="flex items-center gap-2">
-                            <button 
-                              onClick={() => openEditModal(item as WireItem)}
-                              aria-label="Edit item"
-                              className="p-1.5 text-gray-400 hover:text-blue-600 transition"
-                            >
-                              <Edit3 size={14} />
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setContextMenu({ x: e.clientX, y: e.clientY, itemId: item.id });
-                              }}
-                              aria-label="More options"
-                              className="p-1.5 text-gray-400 hover:text-gray-600 transition"
-                            >
-                              <MoreVertical size={14} />
-                            </button>
-                          </div>
-                          <div className="flex gap-2">
-                            {item.status === 'active' ? (
-                              <>
-                                <button
-                                  onClick={() => handleComplete(item.id)}
-                                  className="flex items-center gap-1.5 px-4 py-1.5 bg-emerald-600 text-white rounded-xl text-[10px] font-black hover:bg-emerald-700 transition shadow-sm uppercase tracking-tight"
-                                >
-                                  <CheckCircle2 size={12} /> Complete
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    setArchivingId(item.id);
-                                    setIsArchiveModalOpen(true);
-                                  }}
-                                  className="flex items-center gap-1.5 px-4 py-1.5 bg-rose-600 text-white rounded-xl text-[10px] font-black hover:bg-rose-700 transition shadow-sm uppercase tracking-tight"
-                                >
-                                  <Trash2 size={12} /> Remove
-                                </button>
-                              </>
-                            ) : (
-                              <button
-                                onClick={() => handleRestore(item.id)}
-                                className="flex items-center gap-1.5 px-4 py-1.5 bg-gray-600 text-white rounded-xl text-[10px] font-black hover:bg-gray-700 transition shadow-sm uppercase tracking-tight"
+                                }}
+                                role="checkbox"
+                                aria-checked={selectedIds.has(item.id)}
+                                aria-label="Select item"
+                                tabIndex={0}
+                                className={`w-4 h-4 mt-1 rounded border transition-all shrink-0 ${
+                                  selectedIds.has(item.id) ? 'bg-yellow-700 border-yellow-800' : 'bg-white border-yellow-300'
+                                }`}
                               >
-                                <RefreshCw size={12} /> Restore
-                              </button>
-                            )}
+                                {selectedIds.has(item.id) && <Check size={12} className="text-white mx-auto" />}
+                              </div>
+                              <div>
+                                <div className="text-xl font-black text-gray-800 leading-none">
+                                  {item.orderNumber || '0000000'} / {item.lineNumber || '1'}
+                                </div>
+                                <div className="text-[9px] font-bold text-gray-500 uppercase mt-1">
+                                  {new Date(item.createdAt).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })}, {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} @ {item.entryType || 'BRANCH'}
+                                </div>
+                                <div className="text-[10px] font-black text-gray-700 uppercase mt-0.5">
+                                  {item.customer || 'N/A'}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="mt-4 bg-yellow-200/50 border border-yellow-300/50 rounded px-3 py-1.5 flex items-center gap-3 w-fit">
+                              <span className="text-xs font-black text-gray-800 italic">{item.lengthZ || '0'} Z</span>
+                              <span className="text-xs font-black text-gray-800 italic uppercase">{item.wireType || 'WIRE'}</span>
+                            </div>
                           </div>
+
+                          {/* Column 2: Order Comments */}
+                          <div className="col-span-4 p-4 border-l border-yellow-200/50 text-xs font-semibold text-gray-700 leading-tight">
+                            {item.orderComments || ''}
+                          </div>
+
+                          {/* Column 3: Shipper Comments */}
+                          <div className="col-span-4 p-4 border-l border-yellow-200/50 flex flex-col justify-between">
+                            <div className="text-xs font-semibold text-gray-700 leading-tight">
+                              {item.shipperComments || ''}
+                            </div>
+
+                            {/* Action Buttons inside the card */}
+                            <div className="flex justify-end items-center gap-2 mt-4">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); addToast('AutoFill logic not yet implemented', 'info'); }}
+                                className="flex items-center gap-1 px-3 py-1 bg-blue-600 text-white rounded text-[10px] font-black uppercase hover:bg-blue-700 transition"
+                              >
+                                <Database size={12} /> AutoFill Cut
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleComplete(item.id); }}
+                                className="flex items-center gap-1 px-3 py-1 bg-emerald-600 text-white rounded text-[10px] font-black uppercase hover:bg-emerald-700 transition"
+                              >
+                                <Check size={12} /> Complete
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setArchivingId(item.id); setIsArchiveModalOpen(true); }}
+                                className="flex items-center gap-1 px-3 py-1 bg-rose-600 text-white rounded text-[10px] font-black uppercase hover:bg-rose-700 transition"
+                              >
+                                <X size={12} /> Remove
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Context Menu Hook (Invisible) */}
+                        <div className="absolute bottom-2 left-2 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); openEditModal(item as WireItem); }}
+                            className="p-1 text-gray-400 hover:text-blue-600 transition"
+                            title="Edit"
+                          >
+                            <Edit3 size={14} />
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setContextMenu({ x: e.clientX, y: e.clientY, itemId: item.id }); }}
+                            className="p-1 text-gray-400 hover:text-gray-600 transition"
+                            title="Options"
+                          >
+                            <MoreVertical size={14} />
+                          </button>
                         </div>
                       </motion.div>
                     ))}
