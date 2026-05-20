@@ -196,7 +196,6 @@ export default function App() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-  const [isListExpanded, setIsListExpanded] = useState(true);
   const [toasts, setToasts] = useState<{ id: string, message: string, type: 'success' | 'error' | 'info' }[]>([]);
   
   // Modals
@@ -476,6 +475,118 @@ export default function App() {
     addToast('CSV exported successfully', 'success');
   };
 
+  const exportToMarkdown = () => {
+    if (filteredItems.length === 0) {
+      addToast('No items to export', 'error');
+      return;
+    }
+
+    let mdContent = '# EECOL Wire Cut List\n\n';
+    mdContent += '| Order # | Line | Type | Customer | Wire Type | Length | Urgency | Status |\n';
+    mdContent += '| --- | --- | --- | --- | --- | --- | --- | --- |\n';
+
+    filteredItems.forEach(item => {
+      mdContent += `| ${item.orderNumber} | ${item.lineNumber} | ${item.entryType} | ${item.customer} | ${item.wireType} | ${item.lengthZ} | ${item.urgency} | ${item.status} |\n`;
+    });
+
+    const blob = new Blob([mdContent], { type: 'text/markdown;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `eecol_wire_list_${new Date().toISOString().split('T')[0]}.md`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    addToast('Markdown exported successfully', 'success');
+  };
+
+  const exportToHTML = () => {
+    if (filteredItems.length === 0) {
+      addToast('No items to export', 'error');
+      return;
+    }
+
+    let htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>EECOL Wire Cut List</title>
+        <style>
+          table { width: 100%; border-collapse: collapse; font-family: sans-serif; }
+          th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+          th { background-color: #f2f2f2; }
+          tr:nth-child(even) { background-color: #f9f9f9; }
+        </style>
+      </head>
+      <body>
+        <h1>EECOL Wire Cut List</h1>
+        <table>
+          <thead>
+            <tr>
+              <th>Order #</th><th>Line</th><th>Type</th><th>Customer</th><th>Wire Type</th><th>Length</th><th>Urgency</th><th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+    `;
+
+    filteredItems.forEach(item => {
+      htmlContent += `
+        <tr>
+          <td>${item.orderNumber}</td><td>${item.lineNumber}</td><td>${item.entryType}</td><td>${item.customer}</td><td>${item.wireType}</td><td>${item.lengthZ}</td><td>${item.urgency}</td><td>${item.status}</td>
+        </tr>
+      `;
+    });
+
+    htmlContent += `
+          </tbody>
+        </table>
+      </body>
+      </html>
+    `;
+
+    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `eecol_wire_list_${new Date().toISOString().split('T')[0]}.html`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    addToast('HTML exported successfully', 'success');
+  };
+
+  const exportToText = () => {
+    if (filteredItems.length === 0) {
+      addToast('No items to export', 'error');
+      return;
+    }
+
+    let textContent = 'EECOL WIRE CUT LIST\n';
+    textContent += '='.repeat(20) + '\n\n';
+
+    filteredItems.forEach(item => {
+      textContent += `Order: ${item.orderNumber} / Line: ${item.lineNumber}\n`;
+      textContent += `Type: ${item.entryType} | Customer: ${item.customer}\n`;
+      textContent += `Wire: ${item.wireType} | Length: ${item.lengthZ}\n`;
+      textContent += `Urgency: ${item.urgency} | Status: ${item.status}\n`;
+      textContent += `Comments: ${item.orderComments || 'None'}\n`;
+      textContent += '-'.repeat(20) + '\n';
+    });
+
+    const blob = new Blob([textContent], { type: 'text/plain;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `eecol_wire_list_${new Date().toISOString().split('T')[0]}.txt`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    addToast('Text exported successfully', 'success');
+  };
+
   const handleSaveItem = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingItem) return;
@@ -661,19 +772,39 @@ export default function App() {
             >
               <RefreshCw size={18} /> Refresh
             </button>
-            <button
-              onClick={exportToCSV}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-black text-sm shadow-sm"
-            >
-              <Download size={18} /> Export CSV
-            </button>
-            <button
-              onClick={() => setIsListExpanded(!isListExpanded)}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition font-black text-sm shadow-sm"
-            >
-              {isListExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-              {isListExpanded ? 'Collapse' : 'Expand'}
-            </button>
+            <div className="relative group/export">
+              <button
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-black text-sm shadow-sm"
+              >
+                <Download size={18} /> Export
+              </button>
+              <div className="absolute top-full left-0 mt-1 w-40 bg-white border border-gray-200 rounded-xl shadow-xl opacity-0 invisible group-hover/export:opacity-100 group-hover/export:visible transition-all z-50 p-1">
+                <button
+                  onClick={exportToCSV}
+                  className="w-full text-left px-3 py-2 text-xs font-bold text-gray-700 hover:bg-blue-50 hover:text-blue-700 rounded-lg transition"
+                >
+                  Export CSV
+                </button>
+                <button
+                  onClick={exportToHTML}
+                  className="w-full text-left px-3 py-2 text-xs font-bold text-gray-700 hover:bg-blue-50 hover:text-blue-700 rounded-lg transition"
+                >
+                  Export HTML
+                </button>
+                <button
+                  onClick={exportToMarkdown}
+                  className="w-full text-left px-3 py-2 text-xs font-bold text-gray-700 hover:bg-blue-50 hover:text-blue-700 rounded-lg transition"
+                >
+                  Export Markdown
+                </button>
+                <button
+                  onClick={exportToText}
+                  className="w-full text-left px-3 py-2 text-xs font-bold text-gray-700 hover:bg-blue-50 hover:text-blue-700 rounded-lg transition"
+                >
+                  Export Text
+                </button>
+              </div>
+            </div>
             <button
               onClick={() => setIsSettingsModalOpen(true)}
               className="p-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition shadow-sm"
@@ -798,7 +929,6 @@ export default function App() {
 
           {/* List Content */}
           <AnimatePresence>
-            {isListExpanded && (
               <motion.div 
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: 'auto', opacity: 1 }}
@@ -903,7 +1033,7 @@ export default function App() {
                           </div>
 
                           {/* Column 2: Order Comments */}
-                          <div className="col-span-4 p-4 border-l border-yellow-200/50 text-xs font-semibold text-gray-700 leading-tight">
+                          <div className="col-span-4 p-4 border-l border-yellow-200/50 text-sm font-bold text-gray-700 leading-tight">
                             {item.orderComments || ''}
                           </div>
 
@@ -914,20 +1044,22 @@ export default function App() {
                             </div>
 
                             {/* Action Buttons inside the card */}
-                            <div className="flex justify-end items-center gap-2 mt-4">
-                              <button
-                                onClick={(e) => { e.stopPropagation(); handleComplete(item.id); }}
-                                className="flex items-center gap-1 px-3 py-1 bg-emerald-600 text-white rounded text-[10px] font-black uppercase hover:bg-emerald-700 transition"
-                              >
-                                <Check size={12} /> Complete
-                              </button>
-                              <button
-                                onClick={(e) => { e.stopPropagation(); setArchivingId(item.id); setIsArchiveModalOpen(true); }}
-                                className="flex items-center gap-1 px-3 py-1 bg-rose-600 text-white rounded text-[10px] font-black uppercase hover:bg-rose-700 transition"
-                              >
-                                <X size={12} /> Remove
-                              </button>
-                            </div>
+                            {item.status === 'active' && (
+                              <div className="flex justify-end items-center gap-2 mt-4">
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleComplete(item.id); }}
+                                  className="flex items-center gap-1 px-3 py-1 bg-emerald-600 text-white rounded text-[10px] font-black uppercase hover:bg-emerald-700 transition"
+                                >
+                                  <Check size={12} /> Complete
+                                </button>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setArchivingId(item.id); setIsArchiveModalOpen(true); }}
+                                  className="flex items-center gap-1 px-3 py-1 bg-rose-600 text-white rounded text-[10px] font-black uppercase hover:bg-rose-700 transition"
+                                >
+                                  <X size={12} /> Remove
+                                </button>
+                              </div>
+                            )}
                           </div>
                         </div>
 
@@ -953,7 +1085,6 @@ export default function App() {
                   </div>
                 )}
               </motion.div>
-            )}
           </AnimatePresence>
         </div>
 
