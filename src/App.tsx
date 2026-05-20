@@ -916,12 +916,6 @@ export default function App() {
                             {/* Action Buttons inside the card */}
                             <div className="flex justify-end items-center gap-2 mt-4">
                               <button
-                                onClick={(e) => { e.stopPropagation(); addToast('AutoFill logic not yet implemented', 'info'); }}
-                                className="flex items-center gap-1 px-3 py-1 bg-blue-600 text-white rounded text-[10px] font-black uppercase hover:bg-blue-700 transition"
-                              >
-                                <Database size={12} /> AutoFill Cut
-                              </button>
-                              <button
                                 onClick={(e) => { e.stopPropagation(); handleComplete(item.id); }}
                                 className="flex items-center gap-1 px-3 py-1 bg-emerald-600 text-white rounded text-[10px] font-black uppercase hover:bg-emerald-700 transition"
                               >
