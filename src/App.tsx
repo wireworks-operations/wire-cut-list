@@ -33,7 +33,9 @@ import {
   Check,
   Database,
   Eye,
-  ArrowLeft
+  ArrowLeft,
+  Link2,
+  Link2Off
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -60,6 +62,7 @@ interface WireItem {
   color: string;
   position: number;
   createdAt: number;
+  linkId?: string;
 }
 
 interface Settings {
@@ -607,6 +610,7 @@ export default function App() {
       color: editingItem.color || '#ffffff',
       position: editingItem.position ?? items.length,
       createdAt: editingItem.createdAt || Date.now(),
+      linkId: editingItem.linkId,
     };
 
     try {
@@ -713,6 +717,69 @@ export default function App() {
       setContextMenu(null);
     } catch (error) {
       addToast('Failed to update color.', 'error');
+    }
+  };
+
+  const handleLinkByOrderNumber = async (id: string) => {
+    const referenceItem = items.find(i => i.id === id);
+    if (!referenceItem) return;
+
+    const orderNumber = referenceItem.orderNumber;
+    const linkId = crypto.randomUUID();
+
+    const itemsToUpdate = items.filter(item => item.orderNumber === orderNumber);
+    const updatedItems = items.map(item =>
+      item.orderNumber === orderNumber ? { ...item, linkId } : item
+    );
+
+    try {
+      for (const item of itemsToUpdate) {
+        await saveItemDB({ ...item, linkId });
+      }
+      setItems(updatedItems);
+      addToast(`Linked ${itemsToUpdate.length} items with order #${orderNumber}`, 'success');
+      setContextMenu(null);
+    } catch (error) {
+      addToast('Failed to link items.', 'error');
+    }
+  };
+
+  const handleLinkSelected = async () => {
+    if (selectedIds.size < 2) return;
+
+    const linkId = crypto.randomUUID();
+    const updatedItems = items.map(item =>
+      selectedIds.has(item.id) ? { ...item, linkId } : item
+    );
+
+    try {
+      for (const id of selectedIds) {
+        const item = items.find(i => i.id === id);
+        if (item) await saveItemDB({ ...item, linkId });
+      }
+      setItems(updatedItems);
+      addToast(`Linked ${selectedIds.size} selected items`, 'success');
+      setSelectedIds(new Set());
+      setContextMenu(null);
+    } catch (error) {
+      addToast('Failed to link selected items.', 'error');
+    }
+  };
+
+  const handleUnlink = async (id: string) => {
+    const item = items.find(i => i.id === id);
+    if (!item) return;
+
+    // Actually just setting it to undefined is enough since it's optional
+    const newItem = { ...item, linkId: undefined };
+
+    try {
+      await saveItemDB(newItem);
+      setItems(prev => prev.map(i => i.id === id ? newItem : i));
+      addToast('Item unlinked from group', 'success');
+      setContextMenu(null);
+    } catch (error) {
+      addToast('Failed to unlink item.', 'error');
     }
   };
 
@@ -953,7 +1020,11 @@ export default function App() {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {filteredItems.map((item) => (
+                    {filteredItems.map((item, index) => {
+                      const isLinkedToPrev = index > 0 && item.linkId && filteredItems[index - 1].linkId === item.linkId;
+                      const isLinkedToNext = index < filteredItems.length - 1 && item.linkId && filteredItems[index + 1].linkId === item.linkId;
+
+                      return (
                       <motion.div
                         key={item.id}
                         layout
@@ -977,7 +1048,7 @@ export default function App() {
                         aria-expanded={expandedIds.has(item.id)}
                         className={`relative group border border-yellow-300 rounded-xl overflow-hidden transition-all hover:shadow-md cursor-pointer outline-none focus:ring-2 focus:ring-yellow-400 flex flex-col ${
                           draggedId === item.id ? 'opacity-50' : ''
-                        }`}
+                        } ${isLinkedToPrev ? '!mt-0 rounded-t-none border-t-0' : ''} ${isLinkedToNext ? 'rounded-b-none' : ''} ${item.linkId ? 'border-l-4 border-l-blue-600' : ''}`}
                         style={{ backgroundColor: item.color === '#ffffff' ? '#fff9c4' : item.color }}
                       >
                         {/* Section Headers */}
@@ -1014,8 +1085,9 @@ export default function App() {
                                 {selectedIds.has(item.id) && <Check size={12} className="text-white mx-auto" />}
                               </div>
                               <div>
-                                <div className="text-xl font-black text-gray-800 leading-none">
+                                <div className="text-xl font-black text-gray-800 leading-none flex items-center gap-2">
                                   {item.orderNumber || '0000000'} / {item.lineNumber || '1'}
+                                  {item.linkId && <Link2 size={16} className="text-blue-600 shrink-0" />}
                                 </div>
                                 <div className="text-[9px] font-bold text-gray-500 uppercase mt-1">
                                   {new Date(item.createdAt).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })}, {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} @ {item.entryType || 'BRANCH'}
@@ -1081,7 +1153,7 @@ export default function App() {
                           </button>
                         </div>
                       </motion.div>
-                    ))}
+                    )})}
                   </div>
                 )}
               </motion.div>
@@ -1572,6 +1644,33 @@ export default function App() {
               >
                 <Copy size={14} className="text-amber-500" /> Duplicate Item
               </button>
+
+              <div className="h-px bg-gray-100 my-1.5" />
+
+              <button
+                onClick={() => handleLinkByOrderNumber(contextMenu.itemId)}
+                className="w-full flex items-center gap-3 px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 rounded-xl transition"
+              >
+                <Link2 size={14} className="text-blue-600" /> Link same Order #
+              </button>
+
+              {selectedIds.size > 1 && (
+                <button
+                  onClick={handleLinkSelected}
+                  className="w-full flex items-center gap-3 px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 rounded-xl transition"
+                >
+                  <Link2 size={14} className="text-emerald-600" /> Link Selected
+                </button>
+              )}
+
+              {items.find(i => i.id === contextMenu.itemId)?.linkId && (
+                <button
+                  onClick={() => handleUnlink(contextMenu.itemId)}
+                  className="w-full flex items-center gap-3 px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 rounded-xl transition"
+                >
+                  <Link2Off size={14} className="text-rose-600" /> Unlink from group
+                </button>
+              )}
               
               <div className="py-2 px-3">
                 <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2 mb-2">
