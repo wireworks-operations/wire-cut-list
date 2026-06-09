@@ -35,7 +35,9 @@ import {
   Eye,
   ArrowLeft,
   Link2,
-  Link2Off
+  Link2Off,
+  Activity,
+  Play
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -63,6 +65,7 @@ interface WireItem {
   position: number;
   createdAt: number;
   linkId?: string;
+  isWorking?: boolean;
 }
 
 interface Settings {
@@ -611,6 +614,7 @@ export default function App() {
       position: editingItem.position ?? items.length,
       createdAt: editingItem.createdAt || Date.now(),
       linkId: editingItem.linkId,
+      isWorking: editingItem.isWorking,
     };
 
     try {
@@ -710,13 +714,29 @@ export default function App() {
   const handleColorChange = async (id: string, color: string) => {
     const item = items.find(i => i.id === id);
     if (!item) return;
-    const updatedItem = { ...item, color };
-    try {
-      await saveItemDB(updatedItem);
-      setItems(prev => prev.map(i => i.id === id ? updatedItem : i));
-      setContextMenu(null);
-    } catch (error) {
-      addToast('Failed to update color.', 'error');
+
+    if (item.linkId) {
+      const updatedItems = items.map(i => i.linkId === item.linkId ? { ...i, color } : i);
+      try {
+        const group = items.filter(i => i.linkId === item.linkId);
+        for (const i of group) {
+          await saveItemDB({ ...i, color });
+        }
+        setItems(updatedItems);
+        addToast('Group color updated', 'success');
+        setContextMenu(null);
+      } catch (error) {
+        addToast('Failed to update group color.', 'error');
+      }
+    } else {
+      const updatedItem = { ...item, color };
+      try {
+        await saveItemDB(updatedItem);
+        setItems(prev => prev.map(i => i.id === id ? updatedItem : i));
+        setContextMenu(null);
+      } catch (error) {
+        addToast('Failed to update color.', 'error');
+      }
     }
   };
 
@@ -744,18 +764,20 @@ export default function App() {
     }
   };
 
-  const handleLinkSelected = async () => {
+  const handleLinkSelected = async (groupColor?: string) => {
     if (selectedIds.size < 2) return;
 
     const linkId = crypto.randomUUID();
+    const color = groupColor || '#ffffff';
+
     const updatedItems = items.map(item =>
-      selectedIds.has(item.id) ? { ...item, linkId } : item
+      selectedIds.has(item.id) ? { ...item, linkId, color } : item
     );
 
     try {
       for (const id of selectedIds) {
         const item = items.find(i => i.id === id);
-        if (item) await saveItemDB({ ...item, linkId });
+        if (item) await saveItemDB({ ...item, linkId, color });
       }
       setItems(updatedItems);
       addToast(`Linked ${selectedIds.size} selected items`, 'success');
@@ -770,7 +792,6 @@ export default function App() {
     const item = items.find(i => i.id === id);
     if (!item) return;
 
-    // Actually just setting it to undefined is enough since it's optional
     const newItem = { ...item, linkId: undefined };
 
     try {
@@ -780,6 +801,39 @@ export default function App() {
       setContextMenu(null);
     } catch (error) {
       addToast('Failed to unlink item.', 'error');
+    }
+  };
+
+  const handleToggleActiveWork = async (id: string) => {
+    const item = items.find(i => i.id === id);
+    if (!item) return;
+
+    const targetWorking = !item.isWorking;
+
+    const updatedItems = items.map(i => {
+      if (targetWorking) {
+        if (item.linkId && i.linkId === item.linkId) return { ...i, isWorking: true };
+        if (!item.linkId && i.id === item.id) return { ...i, isWorking: true };
+        return { ...i, isWorking: false };
+      } else {
+        if (item.linkId && i.linkId === item.linkId) return { ...i, isWorking: false };
+        if (!item.linkId && i.id === item.id) return { ...i, isWorking: false };
+        return i;
+      }
+    });
+
+    try {
+      for (const i of updatedItems) {
+        const original = items.find(orig => orig.id === i.id);
+        if (original?.isWorking !== i.isWorking) {
+          await saveItemDB(i);
+        }
+      }
+      setItems(updatedItems);
+      addToast(targetWorking ? 'Active work started' : 'Active work stopped', 'info');
+      setContextMenu(null);
+    } catch (error) {
+      addToast('Failed to update active work status.', 'error');
     }
   };
 
@@ -971,6 +1025,27 @@ export default function App() {
                   </button>
                 </div>
                 <div className="flex gap-2">
+                  {selectedIds.size > 1 && (
+                    <div className="relative group/link">
+                      <button
+                        className="flex items-center gap-1 px-3 py-1 bg-white/20 hover:bg-white/30 rounded-lg text-[10px] font-black uppercase transition"
+                      >
+                        <Link2 size={12} /> Link Selected
+                      </button>
+                      <div className="absolute bottom-full right-0 mb-1 bg-white p-2 rounded-xl shadow-2xl border border-gray-200 opacity-0 invisible group-hover/link:opacity-100 group-hover/link:visible transition-all flex flex-wrap gap-2 w-32 justify-center z-50">
+                        <span className="w-full text-[8px] font-black text-gray-400 uppercase text-center mb-1">Pick Group Color</span>
+                        {COLORS.map(c => (
+                          <button
+                            key={c.name}
+                            onClick={() => handleLinkSelected(c.value)}
+                            className="w-6 h-6 rounded-full border border-gray-100 hover:scale-110 transition shadow-sm"
+                            style={{ backgroundColor: c.value }}
+                            title={c.name}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <button 
                     onClick={handleBulkComplete}
                     className="flex items-center gap-1 px-3 py-1 bg-white/20 hover:bg-white/30 rounded-lg text-[10px] font-black uppercase transition"
@@ -1046,15 +1121,28 @@ export default function App() {
                         role="button"
                         tabIndex={0}
                         aria-expanded={expandedIds.has(item.id)}
-                        className={`relative group border border-yellow-300 rounded-xl overflow-hidden transition-all hover:shadow-md cursor-pointer outline-none focus:ring-2 focus:ring-yellow-400 flex flex-col ${
+                        animate={item.isWorking ? { boxShadow: ['0 0 0px rgba(59,130,246,0)', '0 0 20px rgba(59,130,246,0.3)', '0 0 0px rgba(59,130,246,0)'] } : {}}
+                        transition={item.isWorking ? { repeat: Infinity, duration: 2 } : {}}
+                        className={`relative group border rounded-xl overflow-hidden transition-all hover:shadow-md cursor-pointer outline-none focus:ring-2 flex flex-col ${
                           draggedId === item.id ? 'opacity-50' : ''
-                        } ${isLinkedToPrev ? '!mt-0 rounded-t-none border-t-0' : ''} ${isLinkedToNext ? 'rounded-b-none' : ''} ${item.linkId ? 'border-l-4 border-l-blue-600' : ''}`}
+                        } ${isLinkedToPrev ? '!mt-0 rounded-t-none border-t-0' : ''} ${isLinkedToNext ? 'rounded-b-none' : ''} ${item.linkId ? 'border-l-4 border-l-blue-600' : ''} ${
+                          item.isWorking ? 'border-blue-500 ring-2 ring-blue-400 shadow-xl z-10' : 'border-yellow-300 focus:ring-yellow-400'
+                        }`}
                         style={{ backgroundColor: item.color === '#ffffff' ? '#fff9c4' : item.color }}
                       >
                         {/* Section Headers */}
                         <div className="grid grid-cols-12 gap-0 border-b border-yellow-200/50">
-                          <div className="col-span-4 p-2 pl-4">
+                          <div className="col-span-4 p-2 pl-4 flex items-center gap-3">
                             <span className="text-[10px] font-black text-yellow-800/60 uppercase tracking-tighter">ORDER / LINE CUSTOMER</span>
+                            {item.isWorking && (
+                              <motion.span
+                                initial={{ opacity: 0, x: -10 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                className="flex items-center gap-1 bg-blue-600 text-white px-2 py-0.5 rounded text-[8px] font-black tracking-widest"
+                              >
+                                <Activity size={10} className="animate-pulse" /> WORKING NOW
+                              </motion.span>
+                            )}
                           </div>
                           <div className="col-span-4 p-2 border-l border-yellow-200/50">
                             <span className="text-[10px] font-black text-yellow-800/60 uppercase tracking-tighter">ORDER COMMENTS</span>
@@ -1633,6 +1721,21 @@ export default function App() {
                 className="w-full flex items-center gap-3 px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 rounded-xl transition"
               >
                 <Edit3 size={14} className="text-blue-500" /> Edit Item
+              </button>
+
+              <button
+                onClick={() => handleToggleActiveWork(contextMenu.itemId)}
+                className="w-full flex items-center gap-3 px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 rounded-xl transition"
+              >
+                {items.find(i => i.id === contextMenu.itemId)?.isWorking ? (
+                  <>
+                    <Activity size={14} className="text-rose-500" /> Stop Active Work
+                  </>
+                ) : (
+                  <>
+                    <Play size={14} className="text-emerald-500" /> Set as Active Work
+                  </>
+                )}
               </button>
 
               <button 
