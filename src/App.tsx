@@ -66,6 +66,8 @@ interface WireItem {
   createdAt: number;
   linkId?: string;
   isWorking?: boolean;
+  reelType?: 'Chargeable Reel' | 'Non Chargeable Reel' | 'Coil';
+  reelSize?: string;
 }
 
 interface Settings {
@@ -615,6 +617,8 @@ export default function App() {
       createdAt: editingItem.createdAt || Date.now(),
       linkId: editingItem.linkId,
       isWorking: editingItem.isWorking,
+      reelType: editingItem.reelType,
+      reelSize: editingItem.reelSize,
     };
 
     try {
@@ -637,7 +641,7 @@ export default function App() {
   const handleComplete = async (id: string) => {
     const item = items.find(i => i.id === id);
     if (!item) return;
-    const updatedItem = { ...item, status: 'completed' as Status };
+    const updatedItem = { ...item, status: 'completed' as Status, isWorking: false };
     try {
       await saveItemDB(updatedItem);
       setItems(prev => prev.map(i => i.id === id ? updatedItem : i));
@@ -654,7 +658,7 @@ export default function App() {
     }
     const item = items.find(i => i.id === archivingId);
     if (!item) return;
-    const updatedItem = { ...item, status: 'archived' as Status, removalReason };
+    const updatedItem = { ...item, status: 'archived' as Status, removalReason, isWorking: false };
     try {
       await saveItemDB(updatedItem);
       setItems(prev => prev.map(i => i.id === archivingId ? updatedItem : i));
@@ -746,15 +750,17 @@ export default function App() {
 
     const orderNumber = referenceItem.orderNumber;
     const linkId = crypto.randomUUID();
+    const color = referenceItem.color;
+    const isWorking = referenceItem.isWorking;
 
     const itemsToUpdate = items.filter(item => item.orderNumber === orderNumber);
     const updatedItems = items.map(item =>
-      item.orderNumber === orderNumber ? { ...item, linkId } : item
+      item.orderNumber === orderNumber ? { ...item, linkId, color, isWorking } : item
     );
 
     try {
       for (const item of itemsToUpdate) {
-        await saveItemDB({ ...item, linkId });
+        await saveItemDB({ ...item, linkId, color, isWorking });
       }
       setItems(updatedItems);
       addToast(`Linked ${itemsToUpdate.length} items with order #${orderNumber}`, 'success');
@@ -768,16 +774,19 @@ export default function App() {
     if (selectedIds.size < 2) return;
 
     const linkId = crypto.randomUUID();
-    const color = groupColor || '#ffffff';
+
+    const selectedItems = items.filter(i => selectedIds.has(i.id));
+    const anyWorking = selectedItems.some(i => i.isWorking);
+    const color = groupColor || selectedItems[0]?.color || '#ffffff';
 
     const updatedItems = items.map(item =>
-      selectedIds.has(item.id) ? { ...item, linkId, color } : item
+      selectedIds.has(item.id) ? { ...item, linkId, color, isWorking: anyWorking } : item
     );
 
     try {
       for (const id of selectedIds) {
         const item = items.find(i => i.id === id);
-        if (item) await saveItemDB({ ...item, linkId, color });
+        if (item) await saveItemDB({ ...item, linkId, color, isWorking: anyWorking });
       }
       setItems(updatedItems);
       addToast(`Linked ${selectedIds.size} selected items`, 'success');
@@ -1028,7 +1037,9 @@ export default function App() {
                   {selectedIds.size > 1 && (
                     <div className="relative group/link">
                       <button
+                        onClick={() => handleLinkSelected()}
                         className="flex items-center gap-1 px-3 py-1 bg-white/20 hover:bg-white/30 rounded-lg text-[10px] font-black uppercase transition"
+                        title="Link items (Click for default white, or use palette below)"
                       >
                         <Link2 size={12} /> Link Selected
                       </button>
@@ -1186,9 +1197,22 @@ export default function App() {
                               </div>
                             </div>
 
-                            <div className="mt-4 bg-yellow-200/50 border border-yellow-300/50 rounded px-3 py-1.5 flex items-center gap-3 w-fit">
-                              <span className="text-xs font-black text-gray-800 italic">{item.lengthZ || '0'} Z</span>
-                              <span className="text-xs font-black text-gray-800 italic uppercase">{item.wireType || 'WIRE'}</span>
+                            <div className="mt-4 flex flex-wrap gap-2 items-center">
+                              <div className="bg-yellow-200/50 border border-yellow-300/50 rounded px-3 py-1.5 flex items-center gap-3 w-fit">
+                                <span className="text-xs font-black text-gray-800 italic">{item.lengthZ || '0'} Z</span>
+                                <span className="text-xs font-black text-gray-800 italic uppercase">{item.wireType || 'WIRE'}</span>
+                              </div>
+
+                              {item.reelType && (
+                                <div className={`px-2 py-1.5 rounded border text-[9px] font-black uppercase tracking-tighter flex items-center gap-1.5 shadow-sm ${
+                                  item.reelType === 'Coil'
+                                    ? 'bg-orange-50 border-orange-200 text-orange-700'
+                                    : 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                                }`}>
+                                  <Hash size={10} />
+                                  {item.reelType} {item.reelSize ? `(${item.reelSize})` : ''}
+                                </div>
+                              )}
                             </div>
                           </div>
 
@@ -1206,6 +1230,18 @@ export default function App() {
                             {/* Action Buttons inside the card */}
                             {item.status === 'active' && (
                               <div className="flex justify-end items-center gap-2 mt-4">
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleToggleActiveWork(item.id); }}
+                                  className={`flex items-center gap-1 px-3 py-1 rounded text-[10px] font-black uppercase transition shadow-sm ${
+                                    item.isWorking
+                                      ? 'bg-blue-700 text-white animate-pulse ring-2 ring-blue-300'
+                                      : 'bg-blue-600 text-white hover:bg-blue-700'
+                                  }`}
+                                  title={item.isWorking ? "Stop Active Work" : "Set as Active Work"}
+                                >
+                                  {item.isWorking ? <Activity size={12} /> : <Play size={12} />}
+                                  {item.isWorking ? "Working..." : "Start Work"}
+                                </button>
                                 <button
                                   onClick={(e) => { e.stopPropagation(); handleComplete(item.id); }}
                                   className="flex items-center gap-1 px-3 py-1 bg-emerald-600 text-white rounded text-[10px] font-black uppercase hover:bg-emerald-700 transition"
@@ -1369,6 +1405,33 @@ export default function App() {
                       <option value="archived">Archived</option>
                     </select>
                   </div>
+                  <div className="space-y-1">
+                    <label htmlFor="edit-packaging" className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Packaging Type</label>
+                    <select
+                      id="edit-packaging"
+                      value={editingItem?.reelType || ''}
+                      onChange={e => setEditingItem(prev => ({ ...prev, reelType: e.target.value as any }))}
+                      className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                    >
+                      <option value="">Select Type...</option>
+                      <option value="Chargeable Reel">Chargeable Reel</option>
+                      <option value="Non Chargeable Reel">Non Chargeable Reel</option>
+                      <option value="Coil">Coil</option>
+                    </select>
+                  </div>
+                  {(editingItem?.reelType === 'Chargeable Reel' || editingItem?.reelType === 'Non Chargeable Reel') && (
+                    <div className="space-y-1">
+                      <label htmlFor="edit-reel-size" className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Reel Size (inches)</label>
+                      <input
+                        id="edit-reel-size"
+                        type="text"
+                        placeholder='e.g. 24"'
+                        value={editingItem?.reelSize || ''}
+                        onChange={e => setEditingItem(prev => ({ ...prev, reelSize: e.target.value }))}
+                        className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                      />
+                    </div>
+                  )}
                   <div className="col-span-1 sm:col-span-2 space-y-1">
                     <label htmlFor="edit-desc" className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Description</label>
                     <input 
