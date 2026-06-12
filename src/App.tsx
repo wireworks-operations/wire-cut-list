@@ -44,7 +44,7 @@ import { motion, AnimatePresence } from 'motion/react';
 // --- Types ---
 
 type Urgency = 'Normal' | 'High' | 'Urgent';
-type Status = 'active' | 'completed' | 'archived';
+type Status = 'active' | 'completed' | 'archived' | 'on-hold';
 type EntryType = 'IBT' | 'CITY CALL' | 'CUSTOMER ORDER' | 'SHIPPING' | 'EECOL VAN';
 
 interface WireItem {
@@ -68,6 +68,7 @@ interface WireItem {
   isWorking?: boolean;
   reelType?: 'Chargeable Reel' | 'Non Chargeable Reel' | 'Coil';
   reelSize?: string;
+  specialInstructions?: string;
 }
 
 interface Settings {
@@ -216,6 +217,8 @@ export default function App() {
     showErrorToasts: true,
   });
   const [editingItem, setEditingItem] = useState<Partial<WireItem> | null>(null);
+  const [batchLines, setBatchLines] = useState<{ id: string, lineNumber: string, lengthZ: string, wireType: string, reelType?: any, reelSize?: string }[]>([]);
+  const [isBatchMode, setIsBatchMode] = useState(false);
   const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
   const [archivingId, setArchivingId] = useState<string | null>(null);
   const [removalReason, setRemovalReason] = useState('');
@@ -352,6 +355,39 @@ export default function App() {
 
     return result;
   }, [items, searchTerm, statusFilter, entryTypeFilter, sortBy, sortOrder]);
+
+  const activeGroup = useMemo(() => {
+    const activeItem = items.find(i => i.isWorking);
+    if (!activeItem) return null;
+
+    if (activeItem.linkId) {
+      return items.filter(i => i.linkId === activeItem.linkId);
+    }
+    return [activeItem];
+  }, [items]);
+
+  const groupedItems = useMemo(() => {
+    const groups: { linkId: string | null, items: WireItem[], totalInGroup: number }[] = [];
+    const processedLinkIds = new Set<string>();
+
+    const activeItemIds = new Set(activeGroup?.map(i => i.id) || []);
+    const remainingItems = filteredItems.filter(i => !activeItemIds.has(i.id));
+
+    remainingItems.forEach(item => {
+      if (item.linkId) {
+        if (!processedLinkIds.has(item.linkId)) {
+          const groupItems = filteredItems.filter(i => i.linkId === item.linkId);
+          const totalInGroup = items.filter(i => i.linkId === item.linkId).length;
+          groups.push({ linkId: item.linkId, items: groupItems, totalInGroup });
+          processedLinkIds.add(item.linkId);
+        }
+      } else {
+        groups.push({ linkId: null, items: [item], totalInGroup: 1 });
+      }
+    });
+
+    return groups;
+  }, [items, filteredItems, activeGroup]);
 
   const openEditModal = (item: WireItem) => {
     setEditingItem(item);
@@ -599,40 +635,68 @@ export default function App() {
     e.preventDefault();
     if (!editingItem) return;
 
-    const newItem: WireItem = {
-      id: editingItem.id || crypto.randomUUID(),
+    const sharedLinkId = isBatchMode ? crypto.randomUUID() : editingItem.linkId;
+    const baseItem = {
       orderNumber: editingItem.orderNumber || '',
       entryType: editingItem.entryType || 'IBT',
-      lineNumber: editingItem.lineNumber || '',
       customer: editingItem.customer || '',
-      wireType: editingItem.wireType || '',
-      lengthZ: editingItem.lengthZ || '0',
       urgency: editingItem.urgency || 'Normal',
       status: editingItem.status || 'active',
       wireDescription: editingItem.wireDescription || '',
       orderComments: editingItem.orderComments || '',
       shipperComments: editingItem.shipperComments || '',
+      specialInstructions: editingItem.specialInstructions || '',
       color: editingItem.color || '#ffffff',
-      position: editingItem.position ?? items.length,
       createdAt: editingItem.createdAt || Date.now(),
-      linkId: editingItem.linkId,
-      isWorking: editingItem.isWorking,
-      reelType: editingItem.reelType,
-      reelSize: editingItem.reelSize,
     };
 
     try {
-      await saveItemDB(newItem);
-      if (editingItem.id) {
-        setItems(prev => prev.map(item => item.id === newItem.id ? newItem : item));
-        addToast('Item updated successfully', 'success');
+      if (isBatchMode && !editingItem.id) {
+        const newItems: WireItem[] = batchLines.map((line, idx) => ({
+          ...baseItem,
+          id: crypto.randomUUID(),
+          lineNumber: line.lineNumber,
+          lengthZ: line.lengthZ,
+          wireType: line.wireType,
+          reelType: line.reelType,
+          reelSize: line.reelSize,
+          linkId: sharedLinkId,
+          position: items.length + idx,
+        }));
+
+        for (const item of newItems) {
+          await saveItemDB(item);
+        }
+        setItems(prev => [...prev, ...newItems]);
+        addToast(`Added ${newItems.length} items successfully`, 'success');
       } else {
-        setItems(prev => [...prev, newItem]);
-        addToast('Item added successfully', 'success');
+        const newItem: WireItem = {
+          ...baseItem,
+          id: editingItem.id || crypto.randomUUID(),
+          lineNumber: editingItem.lineNumber || '',
+          wireType: editingItem.wireType || '',
+          lengthZ: editingItem.lengthZ || '0',
+          reelType: editingItem.reelType,
+          reelSize: editingItem.reelSize,
+          linkId: sharedLinkId,
+          isWorking: editingItem.isWorking,
+          position: editingItem.position ?? items.length,
+        };
+
+        await saveItemDB(newItem);
+        if (editingItem.id) {
+          setItems(prev => prev.map(item => item.id === newItem.id ? newItem : item));
+          addToast('Item updated successfully', 'success');
+        } else {
+          setItems(prev => [...prev, newItem]);
+          addToast('Item added successfully', 'success');
+        }
       }
 
       setIsEditModalOpen(false);
       setEditingItem(null);
+      setBatchLines([]);
+      setIsBatchMode(false);
     } catch (error) {
       addToast('Failed to save item. Please try again.', 'error');
     }
@@ -797,19 +861,30 @@ export default function App() {
     }
   };
 
-  const handleUnlink = async (id: string) => {
+  const handleUnlink = async (id: string, unlinkAll: boolean = false) => {
     const item = items.find(i => i.id === id);
     if (!item) return;
 
-    const newItem = { ...item, linkId: undefined };
+    const linkId = item.linkId;
+    if (!linkId) return;
 
     try {
-      await saveItemDB(newItem);
-      setItems(prev => prev.map(i => i.id === id ? newItem : i));
-      addToast('Item unlinked from group', 'success');
+      if (unlinkAll) {
+        const groupItems = items.filter(i => i.linkId === linkId);
+        for (const i of groupItems) {
+          await saveItemDB({ ...i, linkId: undefined });
+        }
+        setItems(prev => prev.map(i => i.linkId === linkId ? { ...i, linkId: undefined } : i));
+        addToast('Entire group unlinked', 'success');
+      } else {
+        const newItem = { ...item, linkId: undefined };
+        await saveItemDB(newItem);
+        setItems(prev => prev.map(i => i.id === id ? newItem : i));
+        addToast('Item unlinked from group', 'success');
+      }
       setContextMenu(null);
     } catch (error) {
-      addToast('Failed to unlink item.', 'error');
+      addToast('Failed to unlink.', 'error');
     }
   };
 
@@ -964,6 +1039,7 @@ export default function App() {
                 className="bg-white border border-gray-200 rounded-lg px-3 py-2 text-xs font-bold text-gray-700 outline-none focus:ring-2 focus:ring-yellow-500"
               >
                 <option value="active">Active</option>
+                <option value="on-hold">On Hold</option>
                 <option value="completed">Completed</option>
                 <option value="archived">Archived</option>
                 <option value="all">All</option>
@@ -1099,48 +1175,134 @@ export default function App() {
                     </button>
                   </div>
                 )}
-                {filteredItems.length === 0 ? (
+                {activeGroup && (
+                  <div className="mb-12">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="bg-blue-600 p-2 rounded-lg text-white shadow-lg animate-pulse">
+                        <Activity size={20} />
+                      </div>
+                      <div>
+                        <h2 className="text-lg font-black text-blue-900 uppercase tracking-tighter leading-none">Active Work Priority</h2>
+                        <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest mt-1">Currently being handled by operator</p>
+                      </div>
+                    </div>
+
+                    <div
+                      className="rounded-3xl overflow-hidden ring-4 ring-blue-500 shadow-2xl border-4 border-white"
+                      style={{ backgroundColor: activeGroup[0].color === '#ffffff' ? '#fff9c4' : activeGroup[0].color }}
+                    >
+                      <div className="bg-blue-600 px-6 py-3 flex items-center justify-between text-white">
+                        <div className="flex items-center gap-3">
+                          <Activity size={16} className="animate-pulse" />
+                          <span className="text-xs font-black uppercase tracking-[0.2em]">Live Processing Session</span>
+                        </div>
+                        {activeGroup.length > 1 && (
+                          <span className="text-[10px] font-black bg-white/20 px-3 py-1 rounded-full uppercase">Grouped Order</span>
+                        )}
+                      </div>
+
+                      <div className="flex flex-col">
+                        {activeGroup.map((item, index) => (
+                          <motion.div
+                            key={item.id}
+                            layout
+                            className={`relative p-2 ${index > 0 ? 'border-t border-blue-100/30' : ''}`}
+                          >
+                             {/* Minimized/Standard WireItem simplified for Hero */}
+                             <div className="grid grid-cols-12 min-h-[80px]">
+                               <div className="col-span-4 p-4">
+                                  <div className="text-2xl font-black text-gray-900 leading-none">
+                                    {item.orderNumber} / {item.lineNumber}
+                                  </div>
+                                  <div className="text-[10px] font-bold text-blue-600 uppercase mt-2">
+                                    {item.customer} • {item.entryType}
+                                  </div>
+                               </div>
+                               <div className="col-span-4 p-4 flex flex-col gap-2">
+                                  <div className="text-sm font-bold text-gray-700">
+                                    {item.orderComments || <span className="text-gray-300 italic font-medium">No order comments</span>}
+                                  </div>
+                                  {item.specialInstructions && (
+                                    <div className="p-2 bg-white/40 rounded-lg border border-blue-200/50">
+                                      <span className="text-[8px] font-black text-blue-700 uppercase tracking-widest block mb-1">Special Instructions</span>
+                                      <p className="text-xs font-black text-blue-900 leading-tight">{item.specialInstructions}</p>
+                                    </div>
+                                  )}
+                               </div>
+                               <div className="col-span-4 p-4 flex flex-col justify-between items-end text-right">
+                                  <div className="flex items-center gap-2">
+                                    <span className="px-3 py-1 bg-white/50 rounded-full text-xs font-black italic">{item.lengthZ} Z</span>
+                                    <span className="px-3 py-1 bg-white/50 rounded-full text-xs font-black uppercase">{item.wireType}</span>
+                                  </div>
+                                  <button
+                                    onClick={() => handleToggleActiveWork(item.id)}
+                                    className="mt-4 px-4 py-1.5 bg-rose-600 text-white rounded-xl text-[10px] font-black uppercase shadow-lg hover:bg-rose-700 transition"
+                                  >
+                                    Release Priority
+                                  </button>
+                               </div>
+                             </div>
+                          </motion.div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {groupedItems.length === 0 ? (
                   <div className="py-12 text-center">
                     <AlertCircle className="mx-auto text-gray-300 mb-2" size={32} />
                     <p className="text-gray-400 italic text-sm">No items found in this view.</p>
                   </div>
                 ) : (
-                  <div className="space-y-4">
-                    {filteredItems.map((item, index) => {
-                      const isLinkedToPrev = index > 0 && item.linkId && filteredItems[index - 1].linkId === item.linkId;
-                      const isLinkedToNext = index < filteredItems.length - 1 && item.linkId && filteredItems[index + 1].linkId === item.linkId;
-
-                      return (
-                      <motion.div
-                        key={item.id}
-                        layout
-                        draggable
-                        onDragStart={() => onDragStart(item.id)}
-                        onDragOver={(e) => onDragOver(e, item.id)}
-                        onDragEnd={onDragEnd}
-                        onContextMenu={(e) => {
-                          e.preventDefault();
-                          setContextMenu({ x: e.clientX, y: e.clientY, itemId: item.id });
-                        }}
-                        onClick={() => toggleExpand(item.id)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            toggleExpand(item.id);
-                          }
-                        }}
-                        role="button"
-                        tabIndex={0}
-                        aria-expanded={expandedIds.has(item.id)}
-                        animate={item.isWorking ? { boxShadow: ['0 0 0px rgba(59,130,246,0)', '0 0 20px rgba(59,130,246,0.3)', '0 0 0px rgba(59,130,246,0)'] } : {}}
-                        transition={item.isWorking ? { repeat: Infinity, duration: 2 } : {}}
-                        className={`relative group border rounded-xl overflow-hidden transition-all hover:shadow-md cursor-pointer outline-none focus:ring-2 flex flex-col ${
-                          draggedId === item.id ? 'opacity-50' : ''
-                        } ${isLinkedToPrev ? '!mt-0 rounded-t-none border-t-0' : ''} ${isLinkedToNext ? 'rounded-b-none' : ''} ${item.linkId ? 'border-l-4 border-l-blue-600' : ''} ${
-                          item.isWorking ? 'border-blue-500 ring-2 ring-blue-400 shadow-xl z-10' : 'border-yellow-300 focus:ring-yellow-400'
-                        }`}
-                        style={{ backgroundColor: item.color === '#ffffff' ? '#fff9c4' : item.color }}
+                  <div className="space-y-6">
+                    {groupedItems.map((group, groupIdx) => (
+                      <div
+                        key={group.linkId || group.items[0].id}
+                        className={`rounded-2xl overflow-hidden transition-all ${group.linkId ? 'ring-2 ring-blue-100 shadow-xl' : ''}`}
+                        style={{ backgroundColor: group.items[0].color === '#ffffff' ? '#fff9c4' : group.items[0].color }}
                       >
+                        {group.linkId && (
+                          <div className="bg-blue-600 px-4 py-1.5 flex items-center justify-between text-white">
+                            <div className="flex items-center gap-2">
+                              <Link2 size={12} />
+                              <span className="text-[10px] font-black uppercase tracking-widest">Coupled Order Group</span>
+                            </div>
+                            <span className="text-[10px] font-bold">{group.items.length} Items</span>
+                          </div>
+                        )}
+
+                        <div className="flex flex-col">
+                          {group.items.map((item, index) => (
+                            <motion.div
+                              key={item.id}
+                              layout
+                              draggable
+                              onDragStart={() => onDragStart(item.id)}
+                              onDragOver={(e) => onDragOver(e, item.id)}
+                              onDragEnd={onDragEnd}
+                              onContextMenu={(e) => {
+                                e.preventDefault();
+                                setContextMenu({ x: e.clientX, y: e.clientY, itemId: item.id });
+                              }}
+                              onClick={() => toggleExpand(item.id)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  toggleExpand(item.id);
+                                }
+                              }}
+                              role="button"
+                              tabIndex={0}
+                              aria-expanded={expandedIds.has(item.id)}
+                              animate={item.isWorking ? { boxShadow: ['0 0 0px rgba(59,130,246,0)', '0 0 20px rgba(59,130,246,0.3)', '0 0 0px rgba(59,130,246,0)'] } : {}}
+                              transition={item.isWorking ? { repeat: Infinity, duration: 2 } : {}}
+                              className={`relative group transition-all hover:bg-black/5 cursor-pointer outline-none focus:ring-2 flex flex-col ${
+                                draggedId === item.id ? 'opacity-50' : ''
+                              } ${index > 0 ? 'border-t border-yellow-200/50' : ''} ${
+                                item.isWorking ? 'ring-4 ring-blue-500/30 z-10' : ''
+                              }`}
+                            >
                         {/* Section Headers */}
                         <div className="grid grid-cols-12 gap-0 border-b border-yellow-200/50">
                           <div className="col-span-4 p-2 pl-4 flex items-center gap-3">
@@ -1186,7 +1348,11 @@ export default function App() {
                               <div>
                                 <div className="text-xl font-black text-gray-800 leading-none flex items-center gap-2">
                                   {item.orderNumber || '0000000'} / {item.lineNumber || '1'}
-                                  {item.linkId && <Link2 size={16} className="text-blue-600 shrink-0" />}
+                                  {group.linkId && (
+                                    <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-black">
+                                      {index + 1} / {group.totalInGroup}
+                                    </span>
+                                  )}
                                 </div>
                                 <div className="text-[9px] font-bold text-gray-500 uppercase mt-1">
                                   {new Date(item.createdAt).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })}, {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} @ {item.entryType || 'BRANCH'}
@@ -1217,8 +1383,16 @@ export default function App() {
                           </div>
 
                           {/* Column 2: Order Comments */}
-                          <div className="col-span-4 p-4 border-l border-yellow-200/50 text-sm font-bold text-gray-700 leading-tight">
-                            {item.orderComments || ''}
+                          <div className="col-span-4 p-4 border-l border-yellow-200/50 flex flex-col gap-3">
+                            <div className="text-sm font-bold text-gray-700 leading-tight">
+                              {item.orderComments || ''}
+                            </div>
+                            {item.specialInstructions && (
+                              <div className="mt-2 p-2 bg-rose-50 border border-rose-100 rounded-lg">
+                                <span className="text-[8px] font-black text-rose-600 uppercase tracking-widest block mb-1">Special Instructions</span>
+                                <p className="text-xs font-bold text-rose-800 leading-tight">{item.specialInstructions}</p>
+                              </div>
+                            )}
                           </div>
 
                           {/* Column 3: Shipper Comments */}
@@ -1277,8 +1451,11 @@ export default function App() {
                           </button>
                         </div>
                       </motion.div>
-                    )})}
+                    ))}
+                    </div>
                   </div>
+                ))}
+              </div>
                 )}
               </motion.div>
           </AnimatePresence>
@@ -1314,6 +1491,30 @@ export default function App() {
                   <h3 className="text-2xl font-black text-blue-900 tracking-tighter uppercase">
                     {editingItem?.id ? 'Edit Wire Item' : 'Add New Wire Item'}
                   </h3>
+
+                  {!editingItem?.id && (
+                    <div className="mt-4 flex bg-gray-100 p-1 rounded-xl">
+                      <button
+                        type="button"
+                        onClick={() => setIsBatchMode(false)}
+                        className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase transition ${!isBatchMode ? 'bg-white shadow-sm text-blue-700' : 'text-gray-500'}`}
+                      >
+                        Single Entry
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsBatchMode(true);
+                          if (batchLines.length === 0) {
+                            setBatchLines([{ id: crypto.randomUUID(), lineNumber: '1', lengthZ: '', wireType: '' }]);
+                          }
+                        }}
+                        className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase transition ${isBatchMode ? 'bg-white shadow-sm text-blue-700' : 'text-gray-500'}`}
+                      >
+                        Batch Mode
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-h-[60vh] overflow-y-auto p-1 custom-scrollbar">
@@ -1342,15 +1543,17 @@ export default function App() {
                       <option value="EECOL VAN">EECOL VAN</option>
                     </select>
                   </div>
-                  <div className="space-y-1">
-                    <label htmlFor="edit-line" className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Line #</label>
-                    <input 
-                      id="edit-line"
-                      value={editingItem?.lineNumber || ''}
-                      onChange={e => setEditingItem(prev => ({ ...prev, lineNumber: e.target.value }))}
-                      className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                    />
-                  </div>
+                  {!isBatchMode ? (
+                    <div className="space-y-1">
+                      <label htmlFor="edit-line" className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Line #</label>
+                      <input
+                        id="edit-line"
+                        value={editingItem?.lineNumber || ''}
+                        onChange={e => setEditingItem(prev => ({ ...prev, lineNumber: e.target.value }))}
+                        className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                      />
+                    </div>
+                  ) : null}
                   <div className="space-y-1">
                     <label htmlFor="edit-customer" className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Customer</label>
                     <input 
@@ -1360,25 +1563,29 @@ export default function App() {
                       className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none uppercase font-bold"
                     />
                   </div>
-                  <div className="space-y-1">
-                    <label htmlFor="edit-wire" className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Wire Type</label>
-                    <input 
-                      id="edit-wire"
-                      value={editingItem?.wireType || ''}
-                      onChange={e => setEditingItem(prev => ({ ...prev, wireType: e.target.value.toUpperCase() }))}
-                      className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none uppercase font-bold"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label htmlFor="edit-length" className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Length (Z)</label>
-                    <input 
-                      id="edit-length"
-                      type="number"
-                      value={editingItem?.lengthZ || ''}
-                      onChange={e => setEditingItem(prev => ({ ...prev, lengthZ: e.target.value }))}
-                      className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                    />
-                  </div>
+                  {!isBatchMode ? (
+                    <>
+                      <div className="space-y-1">
+                        <label htmlFor="edit-wire" className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Wire Type</label>
+                        <input
+                          id="edit-wire"
+                          value={editingItem?.wireType || ''}
+                          onChange={e => setEditingItem(prev => ({ ...prev, wireType: e.target.value.toUpperCase() }))}
+                          className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none uppercase font-bold"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label htmlFor="edit-length" className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Length (Z)</label>
+                        <input
+                          id="edit-length"
+                          type="number"
+                          value={editingItem?.lengthZ || ''}
+                          onChange={e => setEditingItem(prev => ({ ...prev, lengthZ: e.target.value }))}
+                          className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                        />
+                      </div>
+                    </>
+                  ) : null}
                   <div className="space-y-1">
                     <label htmlFor="edit-urgency" className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Urgency</label>
                     <select 
@@ -1401,35 +1608,121 @@ export default function App() {
                       className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                     >
                       <option value="active">Active</option>
+                      <option value="on-hold">On Hold</option>
                       <option value="completed">Completed</option>
                       <option value="archived">Archived</option>
                     </select>
                   </div>
-                  <div className="space-y-1">
-                    <label htmlFor="edit-packaging" className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Packaging Type</label>
-                    <select
-                      id="edit-packaging"
-                      value={editingItem?.reelType || ''}
-                      onChange={e => setEditingItem(prev => ({ ...prev, reelType: e.target.value as any }))}
-                      className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                    >
-                      <option value="">Select Type...</option>
-                      <option value="Chargeable Reel">Chargeable Reel</option>
-                      <option value="Non Chargeable Reel">Non Chargeable Reel</option>
-                      <option value="Coil">Coil</option>
-                    </select>
-                  </div>
-                  {(editingItem?.reelType === 'Chargeable Reel' || editingItem?.reelType === 'Non Chargeable Reel') && (
-                    <div className="space-y-1">
-                      <label htmlFor="edit-reel-size" className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Reel Size (inches)</label>
-                      <input
-                        id="edit-reel-size"
-                        type="text"
-                        placeholder='e.g. 24"'
-                        value={editingItem?.reelSize || ''}
-                        onChange={e => setEditingItem(prev => ({ ...prev, reelSize: e.target.value }))}
-                        className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                      />
+                  {!isBatchMode ? (
+                    <>
+                      <div className="space-y-1">
+                        <label htmlFor="edit-packaging" className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Packaging Type</label>
+                        <select
+                          id="edit-packaging"
+                          value={editingItem?.reelType || ''}
+                          onChange={e => setEditingItem(prev => ({ ...prev, reelType: e.target.value as any }))}
+                          className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                        >
+                          <option value="">Select Type...</option>
+                          <option value="Chargeable Reel">Chargeable Reel</option>
+                          <option value="Non Chargeable Reel">Non Chargeable Reel</option>
+                          <option value="Coil">Coil</option>
+                        </select>
+                      </div>
+                      {(editingItem?.reelType === 'Chargeable Reel' || editingItem?.reelType === 'Non Chargeable Reel') && (
+                        <div className="space-y-1">
+                          <label htmlFor="edit-reel-size" className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Reel Size (inches)</label>
+                          <input
+                            id="edit-reel-size"
+                            type="text"
+                            placeholder='e.g. 24"'
+                            value={editingItem?.reelSize || ''}
+                            onChange={e => setEditingItem(prev => ({ ...prev, reelSize: e.target.value }))}
+                            className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                          />
+                        </div>
+                      )}
+                    </>
+                  ) : null}
+
+                  {isBatchMode && (
+                    <div className="col-span-1 sm:col-span-2 mt-4 space-y-4">
+                      <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+                        <h4 className="text-xs font-black text-blue-900 uppercase">Line Items (Batch)</h4>
+                        <button
+                          type="button"
+                          onClick={() => setBatchLines(prev => [...prev, { id: crypto.randomUUID(), lineNumber: (prev.length + 1).toString(), lengthZ: '', wireType: '' }])}
+                          className="flex items-center gap-1 px-3 py-1 bg-blue-50 text-blue-700 rounded-lg text-[9px] font-black uppercase hover:bg-blue-100 transition"
+                        >
+                          <Plus size={12} /> Add Line
+                        </button>
+                      </div>
+
+                      <div className="space-y-2">
+                        {batchLines.map((line, idx) => (
+                          <div key={line.id} className="grid grid-cols-12 gap-2 bg-gray-50 p-3 rounded-xl border border-gray-200">
+                            <div className="col-span-2">
+                              <label className="text-[8px] font-black text-gray-400 uppercase ml-1">Line #</label>
+                              <input
+                                value={line.lineNumber}
+                                onChange={e => setBatchLines(prev => prev.map(l => l.id === line.id ? { ...l, lineNumber: e.target.value } : l))}
+                                className="w-full p-2 bg-white border border-gray-200 rounded-lg text-xs outline-none focus:ring-1 focus:ring-blue-500"
+                              />
+                            </div>
+                            <div className="col-span-4">
+                              <label className="text-[8px] font-black text-gray-400 uppercase ml-1">Wire Type</label>
+                              <input
+                                value={line.wireType}
+                                onChange={e => setBatchLines(prev => prev.map(l => l.id === line.id ? { ...l, wireType: e.target.value.toUpperCase() } : l))}
+                                className="w-full p-2 bg-white border border-gray-200 rounded-lg text-xs outline-none focus:ring-1 focus:ring-blue-500 uppercase font-bold"
+                              />
+                            </div>
+                            <div className="col-span-3">
+                              <label className="text-[8px] font-black text-gray-400 uppercase ml-1">Length (Z)</label>
+                              <input
+                                type="number"
+                                value={line.lengthZ}
+                                onChange={e => setBatchLines(prev => prev.map(l => l.id === line.id ? { ...l, lengthZ: e.target.value } : l))}
+                                className="w-full p-2 bg-white border border-gray-200 rounded-lg text-xs outline-none focus:ring-1 focus:ring-blue-500"
+                              />
+                            </div>
+                            <div className="col-span-2 flex items-end justify-center">
+                              <button
+                                type="button"
+                                onClick={() => setBatchLines(prev => prev.filter(l => l.id !== line.id))}
+                                className="p-2 text-rose-400 hover:text-rose-600 transition"
+                              >
+                                <X size={16} />
+                              </button>
+                            </div>
+
+                            <div className="col-span-6">
+                              <label className="text-[8px] font-black text-gray-400 uppercase ml-1">Packaging</label>
+                              <select
+                                value={line.reelType || ''}
+                                onChange={e => setBatchLines(prev => prev.map(l => l.id === line.id ? { ...l, reelType: e.target.value as any } : l))}
+                                className="w-full p-2 bg-white border border-gray-200 rounded-lg text-xs outline-none focus:ring-1 focus:ring-blue-500"
+                              >
+                                <option value="">Select...</option>
+                                <option value="Chargeable Reel">Chargeable Reel</option>
+                                <option value="Non Chargeable Reel">Non Chargeable Reel</option>
+                                <option value="Coil">Coil</option>
+                              </select>
+                            </div>
+
+                            {(line.reelType === 'Chargeable Reel' || line.reelType === 'Non Chargeable Reel') && (
+                              <div className="col-span-6">
+                                <label className="text-[8px] font-black text-gray-400 uppercase ml-1">Size (in)</label>
+                                <input
+                                  value={line.reelSize || ''}
+                                  onChange={e => setBatchLines(prev => prev.map(l => l.id === line.id ? { ...l, reelSize: e.target.value } : l))}
+                                  className="w-full p-2 bg-white border border-gray-200 rounded-lg text-xs outline-none focus:ring-1 focus:ring-blue-500"
+                                />
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                   <div className="col-span-1 sm:col-span-2 space-y-1">
@@ -1439,6 +1732,15 @@ export default function App() {
                       value={editingItem?.wireDescription || ''}
                       onChange={e => setEditingItem(prev => ({ ...prev, wireDescription: e.target.value }))}
                       className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                    />
+                  </div>
+                  <div className="col-span-1 sm:col-span-2 space-y-1">
+                    <label htmlFor="edit-special" className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Special Instructions</label>
+                    <textarea
+                      id="edit-special"
+                      value={editingItem?.specialInstructions || ''}
+                      onChange={e => setEditingItem(prev => ({ ...prev, specialInstructions: e.target.value }))}
+                      className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm h-20 focus:ring-2 focus:ring-blue-500 outline-none resize-none"
                     />
                   </div>
                   <div className="col-span-1 sm:col-span-2 space-y-1">
@@ -1830,12 +2132,20 @@ export default function App() {
               )}
 
               {items.find(i => i.id === contextMenu.itemId)?.linkId && (
-                <button
-                  onClick={() => handleUnlink(contextMenu.itemId)}
-                  className="w-full flex items-center gap-3 px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 rounded-xl transition"
-                >
-                  <Link2Off size={14} className="text-rose-600" /> Unlink from group
-                </button>
+                <>
+                  <button
+                    onClick={() => handleUnlink(contextMenu.itemId, false)}
+                    className="w-full flex items-center gap-3 px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 rounded-xl transition"
+                  >
+                    <Link2Off size={14} className="text-rose-600" /> Unlink this item
+                  </button>
+                  <button
+                    onClick={() => handleUnlink(contextMenu.itemId, true)}
+                    className="w-full flex items-center gap-3 px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 rounded-xl transition"
+                  >
+                    <Link2Off size={14} className="text-rose-800" /> Unlink entire group
+                  </button>
+                </>
               )}
               
               <div className="py-2 px-3">
