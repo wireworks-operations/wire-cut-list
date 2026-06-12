@@ -357,11 +357,12 @@ export default function App() {
   }, [items, searchTerm, statusFilter, entryTypeFilter, sortBy, sortOrder]);
 
   const activeGroup = useMemo(() => {
-    const activeItem = items.find(i => i.isWorking);
+    const activeItem = items.find(i => i.isWorking && i.status === 'active');
     if (!activeItem) return null;
 
     if (activeItem.linkId) {
-      return items.filter(i => i.linkId === activeItem.linkId);
+      const group = items.filter(i => i.linkId === activeItem.linkId && i.isWorking && i.status === 'active');
+      return group.length > 0 ? group : null;
     }
     return [activeItem];
   }, [items]);
@@ -1234,12 +1235,20 @@ export default function App() {
                                     <span className="px-3 py-1 bg-white/50 rounded-full text-xs font-black italic">{item.lengthZ} Z</span>
                                     <span className="px-3 py-1 bg-white/50 rounded-full text-xs font-black uppercase">{item.wireType}</span>
                                   </div>
-                                  <button
-                                    onClick={() => handleToggleActiveWork(item.id)}
-                                    className="mt-4 px-4 py-1.5 bg-rose-600 text-white rounded-xl text-[10px] font-black uppercase shadow-lg hover:bg-rose-700 transition"
-                                  >
-                                    Release Priority
-                                  </button>
+                                  <div className="mt-4 flex gap-2">
+                                    <button
+                                      onClick={() => handleComplete(item.id)}
+                                      className="px-4 py-1.5 bg-emerald-600 text-white rounded-xl text-[10px] font-black uppercase shadow-lg hover:bg-emerald-700 transition"
+                                    >
+                                      Complete
+                                    </button>
+                                    <button
+                                      onClick={() => handleToggleActiveWork(item.id)}
+                                      className="px-4 py-1.5 bg-rose-600 text-white rounded-xl text-[10px] font-black uppercase shadow-lg hover:bg-rose-700 transition"
+                                    >
+                                      Release Priority
+                                    </button>
+                                  </div>
                                </div>
                              </div>
                           </motion.div>
