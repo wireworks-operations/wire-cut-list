@@ -716,6 +716,27 @@ export default function App() {
     }
   };
 
+  const handleCompleteActiveGroup = async () => {
+    if (!activeGroup) return;
+    try {
+      const updatedItems = items.map(i => {
+        if (activeGroup.some(active => active.id === i.id)) {
+          return { ...i, status: 'completed' as Status, isWorking: false };
+        }
+        return i;
+      });
+
+      for (const item of activeGroup) {
+        await saveItemDB({ ...item, status: 'completed' as Status, isWorking: false });
+      }
+
+      setItems(updatedItems);
+      addToast(`Completed all ${activeGroup.length} items in session`, 'success');
+    } catch (error) {
+      addToast('Failed to complete group.', 'error');
+    }
+  };
+
   const handleArchive = async () => {
     if (!archivingId || !removalReason) {
       addToast('Please provide a reason for removal', 'error');
@@ -1197,9 +1218,19 @@ export default function App() {
                           <Activity size={16} className="animate-pulse" />
                           <span className="text-xs font-black uppercase tracking-[0.2em]">Live Processing Session</span>
                         </div>
-                        {activeGroup.length > 1 && (
-                          <span className="text-[10px] font-black bg-white/20 px-3 py-1 rounded-full uppercase">Grouped Order</span>
-                        )}
+                        <div className="flex items-center gap-3">
+                          {activeGroup.length > 1 && (
+                            <>
+                              <button
+                                onClick={handleCompleteActiveGroup}
+                                className="flex items-center gap-2 px-4 py-1 bg-emerald-500 hover:bg-emerald-400 text-white rounded-lg text-[10px] font-black uppercase transition shadow-lg"
+                              >
+                                <Check size={14} /> Complete All ({activeGroup.length})
+                              </button>
+                              <span className="text-[10px] font-black bg-white/20 px-3 py-1 rounded-full uppercase">Grouped Order</span>
+                            </>
+                          )}
+                        </div>
                       </div>
 
                       <div className="flex flex-col">
