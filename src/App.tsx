@@ -357,11 +357,12 @@ export default function App() {
   }, [items, searchTerm, statusFilter, entryTypeFilter, sortBy, sortOrder]);
 
   const activeGroup = useMemo(() => {
-    const activeItem = items.find(i => i.isWorking);
+    const activeItem = items.find(i => i.isWorking && i.status === 'active');
     if (!activeItem) return null;
 
     if (activeItem.linkId) {
-      return items.filter(i => i.linkId === activeItem.linkId);
+      const group = items.filter(i => i.linkId === activeItem.linkId && i.isWorking && i.status === 'active');
+      return group.length > 0 ? group : null;
     }
     return [activeItem];
   }, [items]);
@@ -712,6 +713,27 @@ export default function App() {
       addToast('Item marked as completed', 'success');
     } catch (error) {
       addToast('Failed to mark as completed.', 'error');
+    }
+  };
+
+  const handleCompleteActiveGroup = async () => {
+    if (!activeGroup) return;
+    try {
+      const updatedItems = items.map(i => {
+        if (activeGroup.some(active => active.id === i.id)) {
+          return { ...i, status: 'completed' as Status, isWorking: false };
+        }
+        return i;
+      });
+
+      for (const item of activeGroup) {
+        await saveItemDB({ ...item, status: 'completed' as Status, isWorking: false });
+      }
+
+      setItems(updatedItems);
+      addToast(`Completed all ${activeGroup.length} items in session`, 'success');
+    } catch (error) {
+      addToast('Failed to complete group.', 'error');
     }
   };
 
@@ -1196,9 +1218,19 @@ export default function App() {
                           <Activity size={16} className="animate-pulse" />
                           <span className="text-xs font-black uppercase tracking-[0.2em]">Live Processing Session</span>
                         </div>
-                        {activeGroup.length > 1 && (
-                          <span className="text-[10px] font-black bg-white/20 px-3 py-1 rounded-full uppercase">Grouped Order</span>
-                        )}
+                        <div className="flex items-center gap-3">
+                          {activeGroup.length > 1 && (
+                            <>
+                              <button
+                                onClick={handleCompleteActiveGroup}
+                                className="flex items-center gap-2 px-4 py-1 bg-emerald-500 hover:bg-emerald-400 text-white rounded-lg text-[10px] font-black uppercase transition shadow-lg"
+                              >
+                                <Check size={14} /> Complete All ({activeGroup.length})
+                              </button>
+                              <span className="text-[10px] font-black bg-white/20 px-3 py-1 rounded-full uppercase">Grouped Order</span>
+                            </>
+                          )}
+                        </div>
                       </div>
 
                       <div className="flex flex-col">
@@ -1234,12 +1266,20 @@ export default function App() {
                                     <span className="px-3 py-1 bg-white/50 rounded-full text-xs font-black italic">{item.lengthZ} Z</span>
                                     <span className="px-3 py-1 bg-white/50 rounded-full text-xs font-black uppercase">{item.wireType}</span>
                                   </div>
-                                  <button
-                                    onClick={() => handleToggleActiveWork(item.id)}
-                                    className="mt-4 px-4 py-1.5 bg-rose-600 text-white rounded-xl text-[10px] font-black uppercase shadow-lg hover:bg-rose-700 transition"
-                                  >
-                                    Release Priority
-                                  </button>
+                                  <div className="mt-4 flex gap-2">
+                                    <button
+                                      onClick={() => handleComplete(item.id)}
+                                      className="px-4 py-1.5 bg-emerald-600 text-white rounded-xl text-[10px] font-black uppercase shadow-lg hover:bg-emerald-700 transition"
+                                    >
+                                      Complete
+                                    </button>
+                                    <button
+                                      onClick={() => handleToggleActiveWork(item.id)}
+                                      className="px-4 py-1.5 bg-rose-600 text-white rounded-xl text-[10px] font-black uppercase shadow-lg hover:bg-rose-700 transition"
+                                    >
+                                      Release Priority
+                                    </button>
+                                  </div>
                                </div>
                              </div>
                           </motion.div>
